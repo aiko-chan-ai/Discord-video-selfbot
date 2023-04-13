@@ -69,7 +69,7 @@ declare class VoiceConnection {
 	constructor(
 		manager: DiscordStreamClient,
 		guildId: Snowflake,
-		channelId: Snowflake
+		channelId: Snowflake,
 	);
 	public guildId: Snowflake;
 	public channelId: Snowflake;
@@ -114,6 +114,7 @@ declare class VoiceConnection {
 	private sendOpcode(op: number, data: any): void;
 	public setVideoStatus(bool?: boolean): void;
 	public setSpeaking(speaking?: boolean): void;
+	public createStream(): Promise<StreamConnection>;
 }
 
 declare class StreamConnection extends VoiceConnection {
