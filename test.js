@@ -7,7 +7,6 @@ const StreamClient = new DiscordStreamClient(client);
 const token = 'token';
 
 client.login(token);
-StreamClient.patch();
 
 client.on('ready', async () => {
 	// Connect to a voice channel

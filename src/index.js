@@ -76,6 +76,7 @@ class DiscordStreamClient {
 	) {
 		if (!channel || !channel.isVoice())
 			throw new Error('No voice channel provided');
+		this.patch();
 		this.channel = channel;
 		this.signalVoiceChannel({ selfMute, selfDeaf, selfVideo });
 		this.connection = new VoiceConnection(
@@ -124,8 +125,7 @@ class DiscordStreamClient {
 	}
 	leaveVoiceChannel() {
 		// Todo
-		this.connection?.stop();
-		this.connection?.streamConnection?.stop();
+		this.unpatch();
 		this.channel = null;
 		this.signalVoiceChannel();
 		this.connection = undefined;
@@ -153,8 +153,7 @@ class DiscordStreamClient {
 		});
 	}
 	pauseScreenShare(isPause = false) {
-		if (!this.connection?.streamConnection)
-			return false;
+		if (!this.connection?.streamConnection) return false;
 		if (!this.channel || !this.channel.isVoice())
 			throw new Error('No voice channel provided');
 		let streamKey = `guild:${this.channel.guildId}:${this.channel.id}:${this.client.user.id}`;
@@ -189,4 +188,10 @@ class DiscordStreamClient {
 }
 
 export default DiscordStreamClient;
-export { DiscordStreamClient, Player, VoiceConnection, StreamConnection, VoiceUDP };
+export {
+	DiscordStreamClient,
+	Player,
+	VoiceConnection,
+	StreamConnection,
+	VoiceUDP,
+};

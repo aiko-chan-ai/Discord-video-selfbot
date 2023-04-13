@@ -47,7 +47,7 @@ npm install discord-stream-client@latest
 npm install discord.js-selfbot-v13@latest
 ```
 
-Create a new client, and patch its events to listen for voice gateway events:
+Create a new client, new StreamClient and login:
 
 ```js
 import { Client } from 'discord.js-selfbot-v13';
@@ -58,7 +58,6 @@ const StreamClient = new DiscordStreamClient(client);
 
 const token = 'token';
 
-StreamClient.patch();
 await client.login(token);
 ```
 
