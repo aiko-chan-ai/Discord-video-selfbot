@@ -34,12 +34,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+.git"
+    "url": "git+https://github.com/aiko-chan-ai/Discord-video-selfbot.git"
   },
   "author": "aiko-chan-ai",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com"
+    "url": "https://github.com/aiko-chan-ai/Discord-video-selfbot/issues"
   },
-  "homepage": ""
+  "homepage": "https://github.com/aiko-chan-ai/Discord-video-selfbot"
 }
