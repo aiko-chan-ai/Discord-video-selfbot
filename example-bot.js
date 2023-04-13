@@ -54,7 +54,7 @@ client.on('messageCreate', async (msg) => {
 		}
 		player = StreamClient.createPlayer(url, stream.udp);
 		player.play();
-		player.on('finish', () => {
+		player.once('finish', () => {
 			player = null;
 		});
 	}
