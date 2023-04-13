@@ -2,7 +2,6 @@ import { Client } from 'discord.js-selfbot-v13';
 import { DiscordStreamClient } from './src/index.js';
 
 const client = new Client();
-
 const StreamClient = new DiscordStreamClient(client);
 
 const token = 'token';
@@ -33,7 +32,11 @@ client.on('ready', async () => {
 	});
 	// Play video !!!
 	player.play();
-	// But I want to use the webcam..
+	// Display `User paused screen sharing` after 5 seconds
+	setTimeout(() => {
+		StreamClient.pauseScreenShare(true);
+	}, 5_000);
+	// But I want to use the webcam...
 	StreamClient.signalVoiceChannel({
 		selfVideo: true,
 		selfMute: false,
@@ -49,10 +52,11 @@ client.on('ready', async () => {
 	});
 	// Play video !!!
 	player_.play();
+	// Stop playing after 10 seconds
 	setTimeout(() => {
-		// Stop playing
+		// Stop playing Screen sharing
 		player.stop();
-		// Stop playing
+		// Stop playing Webcam
 		player_.stop();
 		// Disconnect from the voice channel
 		StreamClient.leaveVoiceChannel();

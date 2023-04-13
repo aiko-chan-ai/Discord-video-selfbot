@@ -6,7 +6,6 @@
   "types": "src/index.d.ts",
   "type": "module",
   "files": [
-    "dist",
     "src"
   ],
   "publishConfig": {
