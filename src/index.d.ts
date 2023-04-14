@@ -115,6 +115,7 @@ declare class VoiceConnection {
 	public setVideoStatus(bool?: boolean): void;
 	public setSpeaking(speaking?: boolean): void;
 	public createStream(): Promise<StreamConnection>;
+	public disconnect(): void;
 }
 
 declare class StreamConnection extends VoiceConnection {

@@ -225,6 +225,10 @@ class VoiceConnection {
 			ssrc: this.ssrc,
 		});
 	}
+	disconnect() {
+		this.ws.close();
+		this.udp = null;
+	}
 }
 
 export default VoiceConnection;

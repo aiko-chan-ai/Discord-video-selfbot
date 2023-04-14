@@ -23,7 +23,7 @@ class DiscordStreamClient {
 		this.client.removeListener('raw', this._handleEvents);
 	}
 	_handleEvents(packet) {
-		if (typeof packet !== 'object') return;
+		if (typeof packet !== 'object' || !packet.t || !packet.d) return;
 		const { t: event, d: data } = packet;
 		if (event === 'VOICE_STATE_UPDATE') {
 			if (data.user_id === this.user.id) {
@@ -52,6 +52,13 @@ class DiscordStreamClient {
 			if (this.streamClient.connection.guildId != guildId) return;
 			if (userId === this.user.id) {
 				this.streamClient.connection.streamConnection.setServer(data);
+			}
+		} else if (event === 'STREAM_DELETE') {
+			const [type, guildId, channelId, userId] =
+				data.stream_key.split(':');
+			if (this.streamClient.connection.guildId != guildId) return;
+			if (userId === this.user.id) {
+				this.streamClient.connection.streamConnection.disconnect();
 			}
 		}
 	}
