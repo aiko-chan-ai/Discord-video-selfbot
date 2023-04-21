@@ -72,6 +72,13 @@ class Player extends EventEmitter {
 				})
 				.output(StreamOutput(this.ivfStream).url, { end: false })
 				.noAudio()
+			if (bitrateVideo && typeof bitrateVideo === 'number' && bitrateVideo > 0) {
+				this.command.videoBitrate(`${bitrateVideo}k`);
+			}
+			if (fpsOutput && typeof fpsOutput === 'number' && fpsOutput > 0) {
+				this.command.fpsOutput(fpsOutput);
+			}
+			this.command
 				//.size(`${streamOpts.width}x${streamOpts.height}`)
 				//.fpsOutput(this.fps)
 				//.videoBitrate(`${this.bitrateVideo}k`)
@@ -83,12 +90,6 @@ class Player extends EventEmitter {
 				.audioFrequency(48000)
 				//.audioBitrate('128k')
 				.format('s16le');
-			if (bitrateVideo && typeof bitrateVideo === 'number' && bitrateVideo > 0) {
-				this.command.videoBitrate(`${bitrateVideo}k`);
-			}
-			if (fpsOutput && typeof fpsOutput === 'number' && fpsOutput > 0) {
-				this.command.fpsOutput(fpsOutput);
-			}
 			if (isHttpUrl) {
 				this.command.inputOption(
 					'-headers',

@@ -20,7 +20,7 @@ class VoiceConnection {
 		this.heartbeatInterval = null;
 		this.selfIp = null;
 		this.selfPort = null;
-        this.secretkey = null;
+		this.secretkey = null;
 	}
 	get videoSsrc() {
 		return this.ssrc ? this.ssrc + 1 : 0;
@@ -31,9 +31,11 @@ class VoiceConnection {
 	get wsEndpoint() {
 		return `wss://${this._endpoint}/?v=${this.voiceVersion}`;
 	}
-    get isReady() {
-        return this.ws && this.ws.readyState === WebSocket.OPEN && this.udp.ready;
-    }
+	get isReady() {
+		return (
+			this.ws && this.ws.readyState === WebSocket.OPEN && this.udp?.ready
+		);
+	}
 	setSession(sessionId) {
 		this.sessionId = sessionId;
 		return this;
@@ -69,17 +71,27 @@ class VoiceConnection {
 					priority: 1000,
 					payload_type: 120,
 				},
-				//{ name: "H264", type: "video", priority: 1000, payload_type: 101, rtx_payload_type: 102},
+				{
+					name: 'H264',
+					type: 'video',
+					priority: 1000,
+					payload_type: 101,
+					rtx_payload_type: 102,
+				},
 				{
 					name: 'VP8',
 					type: 'video',
 					priority: 3000,
 					payload_type: 103,
 					rtx_payload_type: 104,
-					encode: true,
-					decode: true,
 				},
-				//{ name: "VP9", type: "video", priority: 3000, payload_type: 105, rtx_payload_type: 106 },
+				{
+					name: 'VP9',
+					type: 'video',
+					priority: 3000,
+					payload_type: 105,
+					rtx_payload_type: 106,
+				},
 			],
 			data: {
 				address: this.selfIp,
@@ -88,21 +100,22 @@ class VoiceConnection {
 			},
 		});
 	}
-    handleSessionDescription(d) {
-        this.secretkey = new Uint8Array(d.secret_key);
-        this.udp.ready = true;
-        return this;
-    }
+	handleSessionDescription(d) {
+		this.secretkey = new Uint8Array(d.secret_key);
+		this.udp.ready = true;
+		return this;
+	}
 	connect(timeout = 30_000, isResume = false) {
 		return new Promise((resolve, reject) => {
-            if (!this.wsEndpoint || !this.token) {
+			if (!this.wsEndpoint || !this.token) {
 				throw new Error('No voice server or token');
 			}
 			this.ws = new WebSocket(this.wsEndpoint, {
 				followRedirects: true,
 				headers: {
 					origin: 'https://discord.com',
-					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36'
+					'User-Agent':
+						'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36',
 				},
 			});
 			this.ws.on('open', () => {
@@ -160,17 +173,17 @@ class VoiceConnection {
 					}
 				}
 			});
-            let timeoutId = setTimeout(() => {
-                throw new Error('Voice connection timeout');
-            }, timeout).unref();
-            let i = setInterval(() => {
-                if (this.isReady) {
-                    clearTimeout(timeoutId);
-                    clearInterval(i);
-                    resolve(this);
-                }
-            }, 100).unref();
-        });
+			let timeoutId = setTimeout(() => {
+				throw new Error('Voice connection timeout');
+			}, timeout).unref();
+			let i = setInterval(() => {
+				if (this.isReady) {
+					clearTimeout(timeoutId);
+					clearInterval(i);
+					resolve(this);
+				}
+			}, 100).unref();
+		});
 	}
 	doResume() {
 		this.sendOpcode(VoiceOpCodes.RESUME, {
