@@ -30,7 +30,7 @@ client.on('ready', async () => {
 		console.log('Finished playing');
 	});
 	// Play video !!!
-	player.play();
+	player.play(); // default
 	// Display `User paused screen sharing` after 5 seconds
 	setTimeout(() => {
 		StreamClient.pauseScreenShare(true);
@@ -50,7 +50,10 @@ client.on('ready', async () => {
 		console.log('Finished playing');
 	});
 	// Play video !!!
-	player_.play();
+	player_.play(
+		10_000, // Bitrate 10000 kbps
+		15, // fps
+	);
 	// Stop playing after 10 seconds
 	setTimeout(() => {
 		// Stop playing Screen sharing
