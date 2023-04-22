@@ -64,15 +64,20 @@ class Player extends EventEmitter {
 					if (
 						err.message.includes(
 							'ffmpeg was killed with signal SIGINT',
-						)
+						) ||
+						err.message.includes('ffmpeg exited with code 255')
 					) {
 						return;
 					}
 					this.emit('error', err);
 				})
 				.output(StreamOutput(this.ivfStream).url, { end: false })
-				.noAudio()
-			if (bitrateVideo && typeof bitrateVideo === 'number' && bitrateVideo > 0) {
+				.noAudio();
+			if (
+				bitrateVideo &&
+				typeof bitrateVideo === 'number' &&
+				bitrateVideo > 0
+			) {
 				this.command.videoBitrate(`${bitrateVideo}k`);
 			}
 			if (fpsOutput && typeof fpsOutput === 'number' && fpsOutput > 0) {
