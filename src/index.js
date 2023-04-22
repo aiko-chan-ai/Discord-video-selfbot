@@ -3,10 +3,12 @@ import VoiceConnection from './Class/VoiceConnection.js';
 import StreamConnection from './Class/StreamConnection.js';
 import Player from './Media/Player.js';
 import VoiceUDP from './Class/VoiceUDP.js';
+import { Client } from 'discord.js-selfbot-v13';
+import { DiscordStreamClientError, ErrorCodes } from './Util/Error.js';
 
 class DiscordStreamClient {
 	constructor(client) {
-		if (!client) throw new Error('No client provided');
+		if (!client || !(client instanceof Client)) throw new DiscordStreamClientError('NO_CLIENT');
 		Object.defineProperty(this, 'client', { value: client });
 		client.streamClient = this;
 		this.connection = null;
@@ -80,9 +82,10 @@ class DiscordStreamClient {
 	joinVoiceChannel(
 		channel,
 		{ selfMute = false, selfDeaf = false, selfVideo = false } = {},
+		timeout = 30_000,
 	) {
-		if (!channel || !channel.isVoice())
-			throw new Error('No voice channel provided');
+		if (!channel || !channel.isVoice() || !channel.joinable)
+			throw new DiscordStreamClientError('NO_CHANNEL');
 		this.patch();
 		this.channel = channel;
 		this.signalVoiceChannel({ selfMute, selfDeaf, selfVideo });
@@ -102,8 +105,12 @@ class DiscordStreamClient {
 			this.manager.pauseScreenShare(false);
 			return new Promise((resolve, reject) => {
 				let timeoutId = setTimeout(() => {
-					reject(new Error('Voice stream event timeout'));
-				}, 30_000).unref();
+					reject(
+						new DiscordStreamClientError(
+							'STREAM_CONNECTION_FAILED',
+						),
+					);
+				}, timeout).unref();
 				let i = setInterval(() => {
 					if (
 						this.streamConnection.sessionId &&
@@ -119,8 +126,10 @@ class DiscordStreamClient {
 		};
 		return new Promise((resolve, reject) => {
 			let timeoutId = setTimeout(() => {
-				reject(new Error('Voice event timeout'));
-			}, 30_000).unref();
+				reject(
+					new DiscordStreamClientError('JOIN_VOICE_CHANNEL_FAILED'),
+				);
+			}, timeout).unref();
 			let i = setInterval(() => {
 				if (this.connection.sessionId && this.connection.token) {
 					clearTimeout(timeoutId);
@@ -139,9 +148,9 @@ class DiscordStreamClient {
 	}
 	signalScreenShare() {
 		if (!this.connection?.streamConnection)
-			throw new Error('No stream connection');
+			throw new DiscordStreamClientError('NO_STREAM_CONNECTION');
 		if (!this.channel || !this.channel.isVoice())
-			throw new Error('No channel provided');
+			throw new DiscordStreamClientError('MISSING_VOICE_CHANNEL');
 		let data = {
 			type: 'guild',
 			guild_id: null,
@@ -149,7 +158,9 @@ class DiscordStreamClient {
 			preferred_region: null,
 		};
 		if (['DM', 'GROUP_DM'].includes(this.channel.type)) {
-			throw new Error('DM and Group DM not supported');
+			throw new DiscordStreamClientError(
+				'CHANNEL_TYPE_NOT_SUPPORTED',
+			);
 			data.type = 'call';
 		} else {
 			data.guild_id = this.channel.guildId;
@@ -162,10 +173,10 @@ class DiscordStreamClient {
 	pauseScreenShare(isPause = false) {
 		if (!this.connection?.streamConnection) return false;
 		if (!this.channel || !this.channel.isVoice())
-			throw new Error('No voice channel provided');
+			throw new DiscordStreamClientError('MISSING_VOICE_CHANNEL');
 		let streamKey = `guild:${this.channel.guildId}:${this.channel.id}:${this.client.user.id}`;
 		if (['DM', 'GROUP_DM'].includes(this.channel.type)) {
-			throw new Error('DM and Group DM not supported');
+			throw new DiscordStreamClientError('CHANNEL_TYPE_NOT_SUPPORTED');
 			streamKey = `call:${this.channel.id}:${this.client.user.id}`;
 		}
 		this.client.ws.broadcast({
@@ -177,9 +188,10 @@ class DiscordStreamClient {
 		});
 	}
 	createPlayer(path, udpConnection) {
-		if (!this.connection) throw new Error('No connection provided');
+		if (!this.connection) throw new DiscordStreamClientError('NO_STREAM_CONNECTION');
 		if (!(udpConnection instanceof VoiceUDP))
-			throw new Error('No UDP connection provided');
+			throw new DiscordStreamClientError('NO_UDP')
+		if (!path || typeof path !== 'string') throw new DiscordStreamClientError('NO_STREAM_PATH');
 		udpConnection.voiceConnection.setSpeaking(true);
 		udpConnection.voiceConnection.setVideoStatus(true);
 		udpConnection.voiceConnection.manager.pauseScreenShare(false);
@@ -201,4 +213,6 @@ export {
 	VoiceConnection,
 	StreamConnection,
 	VoiceUDP,
+	DiscordStreamClientError,
+	ErrorCodes,
 };

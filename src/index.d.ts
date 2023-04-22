@@ -118,6 +118,17 @@ declare class VoiceConnection {
 	public disconnect(): void;
 }
 
+declare class DiscordStreamClientError extends Error {
+	constructor(code: string);
+	public name: 'DiscordStreamClientError';
+	public code: keyof ErrorCodes;
+	public message: ErrorCodes[keyof ErrorCodes];
+}
+
+interface ErrorCodes {
+	[code: string]: string;
+}
+
 declare class StreamConnection extends VoiceConnection {
 	public serverId: string;
 	public streamKey: string;
@@ -137,7 +148,8 @@ declare class DiscordStreamClient {
 	public signalVoiceChannel(options?: JoinVoiceChannelOptions): Promise<void>;
 	public joinVoiceChannel(
 		channel: VoiceBasedChannel,
-		options?: JoinVoiceChannelOptions
+		options?: JoinVoiceChannelOptions,
+		timeout?: number
 	): Promise<VoiceConnection | StreamConnection>;
 	public leaveVoiceChannel(): Promise<void>;
 	public signalScreenShare(): void;
@@ -152,4 +164,6 @@ export {
 	VoiceConnection,
 	VoiceUDP,
 	Player,
+	DiscordStreamClientError,
+	ErrorCodes,
 };

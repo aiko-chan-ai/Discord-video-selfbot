@@ -1,6 +1,7 @@
 import WebSocket from 'ws';
 import { VoiceOpCodes } from '../Util/Opcode.js';
 import VoiceUDP from './VoiceUDP.js';
+import { DiscordStreamClientError } from '../Util/Error.js';
 
 class VoiceConnection {
 	constructor(manager, guildId, channelId) {
@@ -108,7 +109,7 @@ class VoiceConnection {
 	connect(timeout = 30_000, isResume = false) {
 		return new Promise((resolve, reject) => {
 			if (!this.wsEndpoint || !this.token) {
-				throw new Error('No voice server or token');
+				throw new DiscordStreamClientError('MISSING_VOICE_SERVER');
 			}
 			this.ws = new WebSocket(this.wsEndpoint, {
 				followRedirects: true,
@@ -174,7 +175,7 @@ class VoiceConnection {
 				}
 			});
 			let timeoutId = setTimeout(() => {
-				throw new Error('Voice connection timeout');
+				throw new DiscordStreamClientError('JOIN_VOICE_CHANNEL_FAILED');
 			}, timeout).unref();
 			let i = setInterval(() => {
 				if (this.isReady) {

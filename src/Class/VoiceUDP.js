@@ -3,13 +3,14 @@ import { isIPv4 } from 'net';
 import { AudioPacketizer } from '../Packet/AudioPacketizer.js';
 import { VideoPacketizer } from '../Packet/VideoPacketizer.js';
 import { max_int32bit } from '../Packet/BaseMediaPacketizer.js';
+import { DiscordStreamClientError } from '../Util/Error.js';
 
 // credit to discord.js
 function parseLocalPacket(message) {
 	const packet = Buffer.from(message);
 	const ip = packet.subarray(8, packet.indexOf(0, 8)).toString('utf8');
 	if (!isIPv4(ip)) {
-		throw new Error('Malformed IP address');
+		throw new DiscordStreamClientError('INVALID_IP');
 	}
 	const port = packet.readUInt16BE(packet.length - 2);
 	return { ip, port };

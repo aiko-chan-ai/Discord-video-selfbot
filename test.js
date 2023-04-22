@@ -16,7 +16,8 @@ client.on('ready', async () => {
 			selfDeaf: false,
 			selfMute: true,
 			selfVideo: false,
-		}
+		},
+		30_000, // 30 seconds timeout
 	);
 	// I want to use screen sharing ...
 	const streamConnection = await voiceConnection.createStream();
