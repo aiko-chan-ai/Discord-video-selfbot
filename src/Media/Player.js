@@ -17,45 +17,62 @@ class Player extends EventEmitter {
 		this.ivfStream = null;
 		this.opusStream = null;
 	}
-	play(bitrateVideo, fpsOutput) {
+	validateInputMetadata(input) {
+		return new Promise((resolve, reject) => {
+			const instance = ffmpeg(input).on('error', (err, stdout, stderr) =>
+				reject(err),
+			);
+			instance.ffprobe((err, metadata) => {
+				if (err) reject(err);
+				instance.removeAllListeners();
+				resolve({
+					audio: metadata.streams.find(
+						(s) => s.codec_type === 'audio',
+					),
+					video: metadata.streams.find(
+						(s) => s.codec_type === 'video',
+					),
+				});
+				instance.kill('SIGINT');
+			});
+		});
+	}
+	async play(bitrateVideo, fpsOutput) {
 		const url = this.url;
+		const checkData = await this.validateInputMetadata(url);
 		this.videoStream = new VideoStream(this.voiceUdp, this.fps);
 		this.ivfStream = new IvfTransformer();
-		this.audioStream = new AudioStream(this.voiceUdp);
-		// make opus stream
-		this.opusStream = new prism.opus.Encoder({
-			channels: 2,
-			rate: 48000,
-			frameSize: 960,
-		});
+
 		// get header frame time
 		this.ivfStream.on('header', (header) => {
 			this.videoStream.setSleepTime(getFrameDelayInMilliseconds(header));
 		});
-		this.audioStream.on('finish', () => {
-			this.emit('finishAudio');
-		});
+
 		this.videoStream.on('finish', () => {
 			this.emit('finishVideo');
 		});
+
 		const headers = {
 			'User-Agent':
 				'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.3',
 			Connection: 'keep-alive',
 		};
+
 		let isHttpUrl = false;
 		let isHls = false;
+
 		if (typeof url === 'string') {
 			isHttpUrl = url.startsWith('http') || url.startsWith('https');
 			isHls = url.includes('m3u');
 		}
+
 		try {
 			this.command = ffmpeg(url)
 				.inputOption('-re')
 				.addOption('-loglevel', '0')
 				.addOption('-fflags', 'nobuffer')
 				.addOption('-analyzeduration', '0')
-				// .inputOption('-hwaccel', 'auto')
+				.inputOption('-hwaccel', 'auto')
 				.on('end', () => {
 					this.emit('finish');
 				})
@@ -84,17 +101,27 @@ class Player extends EventEmitter {
 				this.command.fpsOutput(fpsOutput);
 			}
 			this.command
-				//.size(`${streamOpts.width}x${streamOpts.height}`)
-				//.fpsOutput(this.fps)
-				//.videoBitrate(`${this.bitrateVideo}k`)
 				.format('ivf')
-				.outputOption('-deadline', 'realtime')
-				.output(StreamOutput(this.opusStream).url, { end: false })
-				.noVideo()
-				.audioChannels(2)
-				.audioFrequency(48000)
-				//.audioBitrate('128k')
-				.format('s16le');
+				.outputOption('-deadline', 'realtime');
+			if (checkData.audio) {
+				this.audioStream = new AudioStream(this.voiceUdp);
+				// make opus stream
+				this.opusStream = new prism.opus.Encoder({
+					channels: 2,
+					rate: 48000,
+					frameSize: 960,
+				});
+				this.audioStream.on('finish', () => {
+					this.emit('finishAudio');
+				});
+				this.command
+					.output(StreamOutput(this.opusStream).url, { end: false })
+					.noVideo()
+					.audioChannels(2)
+					.audioFrequency(48000)
+					//.audioBitrate('128k')
+					.format('s16le');
+			}
 			if (isHttpUrl) {
 				this.command.inputOption(
 					'-headers',
@@ -111,7 +138,7 @@ class Player extends EventEmitter {
 			}
 			this.command.run();
 			this.ivfStream.pipe(this.videoStream, { end: false });
-			this.opusStream.pipe(this.audioStream, { end: false });
+			this.opusStream?.pipe(this.audioStream, { end: false });
 		} catch (e) {
 			this.command = undefined;
 			this.emit('error', e);
@@ -120,8 +147,8 @@ class Player extends EventEmitter {
 	stop() {
 		if (this.command) {
 			this.ivfStream.destroy();
-			this.opusStream.destroy();
-			this.audioStream.destroy();
+			this.opusStream?.destroy();
+			this.audioStream?.destroy();
 			this.videoStream.destroy();
 			this.command.kill('SIGINT');
 			this.command = null;
