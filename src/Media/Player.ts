@@ -84,7 +84,7 @@ class Player extends EventEmitter {
 				.addOption('-loglevel', '0')
 				.addOption('-fflags', 'nobuffer')
 				.addOption('-analyzeduration', '0')
-				.inputOption('-hwaccel', 'auto')
+				//.inputOption('-hwaccel', 'auto')
 				.on('end', () => {
 					this.emit('finish');
 				})
