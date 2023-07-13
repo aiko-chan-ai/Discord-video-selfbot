@@ -1,13 +1,23 @@
 {
   "name": "discord-stream-client",
-  "version": "1.0.5",
+  "version": "1.1.0",
   "description": "Experiment for making video streaming work for discord selfbots",
-  "main": "src/index.js",
-  "types": "src/index.d.ts",
-  "type": "module",
+  "main": "./dist/index.js",
+  "typings": "./dist/index.d.ts",
+  "exports": {
+    "require": "./dist/index.js",
+    "types": "./dist/index.d.ts"
+  },
+  "directories": {
+    "lib": "src"
+  },
   "files": [
-    "src"
+    "dist"
   ],
+  "scripts": {
+    "test": "node test.js",
+    "build": "tsup"
+  },
   "publishConfig": {
     "access": "public"
   },
@@ -21,9 +31,6 @@
   },
   "peerDependencies": {
     "discord.js-selfbot-v13": "2.x"
-  },
-  "scripts": {
-    "test": "node test.js"
   },
   "keywords": [
     "discord",
@@ -41,5 +48,12 @@
   "bugs": {
     "url": "https://github.com/aiko-chan-ai/Discord-video-selfbot/issues"
   },
-  "homepage": "https://github.com/aiko-chan-ai/Discord-video-selfbot"
+  "homepage": "https://github.com/aiko-chan-ai/Discord-video-selfbot",
+  "devDependencies": {
+    "@types/fluent-ffmpeg": "^2.1.21",
+    "@types/libsodium-wrappers": "^0.7.10",
+    "esbuild-plugin-version-injector": "^1.1.0",
+    "tsup": "^7.1.0",
+    "typescript": "^5.1.6"
+  }
 }

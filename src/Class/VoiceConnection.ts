@@ -1,27 +1,39 @@
 import WebSocket from 'ws';
-import { VoiceOpCodes } from '../Util/Opcode.js';
-import VoiceUDP from './VoiceUDP.js';
-import { DiscordStreamClientError } from '../Util/Error.js';
+import { VoiceOpCodes } from '../Util/Opcode';
+import { DiscordStreamClient } from '../index';
+import VoiceUDP from './VoiceUDP';
+import { DiscordStreamClientError } from '../Util/Error';
+import { Snowflake } from 'discord.js-selfbot-v13';
 
 class VoiceConnection {
-	constructor(manager, guildId, channelId) {
+	serverId!: Snowflake;
+	guildId?: Snowflake;
+	channelId?: Snowflake;
+	sessionId?: string;
+	token?: string;
+	_endpoint?: string;
+	voiceVersion: number;
+	ws?: WebSocket;
+	ssrc?: number;
+	address?: string;
+	port?: number;
+	modes?: string[];
+	udp?: VoiceUDP;
+	heartbeatInterval?: NodeJS.Timeout;
+	selfIp?: string;
+	selfPort?: number;
+	secretkey?: Uint8Array;
+	manager!: DiscordStreamClient;
+	constructor(
+		manager: DiscordStreamClient,
+		guildId?: Snowflake,
+		channelId?: Snowflake,
+	) {
 		Object.defineProperty(this, 'manager', { value: manager });
 		this.guildId = guildId;
 		this.channelId = channelId;
-		this.sessionId = null;
-		this.token = null;
-		this._endpoint = null;
 		this.voiceVersion = 7;
-		this.ws = null;
-		this.ssrc = null;
-		this.address = null;
-		this.port = null;
-		this.modes = null;
 		this.udp = new VoiceUDP(this);
-		this.heartbeatInterval = null;
-		this.selfIp = null;
-		this.selfPort = null;
-		this.secretkey = null;
 	}
 	get videoSsrc() {
 		return this.ssrc ? this.ssrc + 1 : 0;
@@ -37,26 +49,36 @@ class VoiceConnection {
 			this.ws && this.ws.readyState === WebSocket.OPEN && this.udp?.ready
 		);
 	}
-	setSession(sessionId) {
+	setSession(sessionId: string) {
 		this.sessionId = sessionId;
 		return this;
 	}
-	setServer({ token, endpoint } = {}) {
+	setServer(
+		{ token, endpoint } = {} as {
+			token?: string;
+			endpoint?: string;
+		},
+	) {
 		this.token = token;
 		this._endpoint = endpoint;
 		return this;
 	}
-	handleReady(d) {
+	handleReady(d: {
+		ssrc: number;
+		ip: string;
+		port: number;
+		modes: string[];
+	}) {
 		this.ssrc = d.ssrc;
 		this.address = d.ip;
 		this.port = d.port;
 		this.modes = d.modes;
 		return this;
 	}
-	setupHeartbeat(interval) {
+	setupHeartbeat(interval: number) {
 		if (this.heartbeatInterval) {
 			clearInterval(this.heartbeatInterval);
-			this.heartbeatInterval = null;
+			this.heartbeatInterval = undefined;
 		}
 		this.heartbeatInterval = setInterval(() => {
 			this.sendOpcode(VoiceOpCodes.HEARTBEAT, interval);
@@ -101,9 +123,13 @@ class VoiceConnection {
 			},
 		});
 	}
-	handleSessionDescription(d) {
+	handleSessionDescription(d: {
+		secret_key: Uint8Array;
+	}) {
 		this.secretkey = new Uint8Array(d.secret_key);
-		this.udp.ready = true;
+		if (this.udp) {
+			this.udp.ready = true;
+		}
 		return this;
 	}
 	connect(timeout = 30_000, isResume = false) {
@@ -132,17 +158,17 @@ class VoiceConnection {
 			this.ws.on('close', (code) => {
 				// console.log('Voice connection closed', code);
 				clearInterval(this.heartbeatInterval);
-				this.heartbeatInterval = null;
+				this.heartbeatInterval = undefined;
 				if (code === 4_015 || code < 4_000) {
 					this.connect(timeout, true);
 				}
 			});
-			this.ws.on('message', (data) => {
+			this.ws.on('message', (data: string) => {
 				const { op, d } = JSON.parse(data);
 				switch (op) {
 					case VoiceOpCodes.READY: {
 						this.handleReady(d);
-						this.udp.connect();
+						this.udp?.connect();
 						this.setVideoStatus(false);
 						break;
 					}
@@ -196,6 +222,7 @@ class VoiceConnection {
 	doIdentify(video = true) {
 		this.sendOpcode(VoiceOpCodes.IDENTIFY, {
 			server_id: this.serverId ?? this.guildId ?? this.channelId,
+			// @ts-ignore
 			user_id: this.manager.client.user.id,
 			session_id: this.sessionId,
 			token: this.token,
@@ -203,11 +230,11 @@ class VoiceConnection {
 			streams: [{ type: 'screen', rid: '100', quality: 100 }],
 		});
 	}
-	sendOpcode(op, data) {
+	sendOpcode(op: number, data: any) {
 		// console.log("Voice connection send", { op, d: data });
-		this.ws.send(JSON.stringify({ op, d: data }));
+		this.ws?.send(JSON.stringify({ op, d: data }));
 	}
-	setVideoStatus(bool) {
+	setVideoStatus(bool: boolean) {
 		this.sendOpcode(VoiceOpCodes.SOURCES, {
 			audio_ssrc: this.ssrc,
 			video_ssrc: bool ? this.videoSsrc : 0,
@@ -231,7 +258,7 @@ class VoiceConnection {
 			],
 		});
 	}
-	setSpeaking(speaking) {
+	setSpeaking(speaking: boolean) {
 		// audio
 		this.sendOpcode(VoiceOpCodes.SPEAKING, {
 			delay: 0,
@@ -240,8 +267,8 @@ class VoiceConnection {
 		});
 	}
 	disconnect() {
-		this.ws.close();
-		this.udp = null;
+		this.ws?.close();
+		this.udp = undefined;
 	}
 }
 

@@ -1,13 +1,21 @@
 import ffmpeg from 'fluent-ffmpeg';
-import { getFrameDelayInMilliseconds, IvfTransformer } from './ivfreader.js';
+import { getFrameDelayInMilliseconds, IvfTransformer } from './ivfreader';
 import prism from 'prism-media';
-import { VideoStream } from './videoStream.js';
-import { AudioStream } from './audioStream.js';
+import { VideoStream } from './videoStream';
+import { AudioStream } from './audioStream';
 import { StreamOutput } from '@dank074/fluent-ffmpeg-multistream-ts';
 import EventEmitter from 'events';
+import VoiceUDP from '../Class/VoiceUDP';
 
 class Player extends EventEmitter {
-	constructor(url, voiceUdp) {
+	url: any;
+	voiceUdp?: VoiceUDP;
+	command: any;
+	videoStream: any;
+	audioStream: any;
+	ivfStream: any;
+	opusStream: any;
+	constructor(url: any, voiceUdp: VoiceUDP) {
 		super();
 		this.url = url;
 		this.voiceUdp = voiceUdp;
@@ -17,7 +25,10 @@ class Player extends EventEmitter {
 		this.ivfStream = null;
 		this.opusStream = null;
 	}
-	validateInputMetadata(input) {
+	validateInputMetadata(input: any): Promise<{
+		audio: boolean;
+		video: boolean;
+	}> {
 		return new Promise((resolve, reject) => {
 			const instance = ffmpeg(input).on('error', (err, stdout, stderr) =>
 				reject(err),
@@ -26,10 +37,10 @@ class Player extends EventEmitter {
 				if (err) reject(err);
 				instance.removeAllListeners();
 				resolve({
-					audio: metadata.streams.find(
+					audio: metadata.streams.some(
 						(s) => s.codec_type === 'audio',
 					),
-					video: metadata.streams.find(
+					video: metadata.streams.some(
 						(s) => s.codec_type === 'video',
 					),
 				});
@@ -37,14 +48,15 @@ class Player extends EventEmitter {
 			});
 		});
 	}
-	async play(bitrateVideo, fpsOutput) {
+	async play(bitrateVideo?: number, fpsOutput?: number) {
 		const url = this.url;
 		const checkData = await this.validateInputMetadata(url);
+		// @ts-ignore
 		this.videoStream = new VideoStream(this.voiceUdp, this.fps);
 		this.ivfStream = new IvfTransformer();
 
 		// get header frame time
-		this.ivfStream.on('header', (header) => {
+		this.ivfStream.on('header', (header: any) => {
 			this.videoStream.setSleepTime(getFrameDelayInMilliseconds(header));
 		});
 
@@ -100,10 +112,9 @@ class Player extends EventEmitter {
 			if (fpsOutput && typeof fpsOutput === 'number' && fpsOutput > 0) {
 				this.command.fpsOutput(fpsOutput);
 			}
-			this.command
-				.format('ivf')
-				.outputOption('-deadline', 'realtime');
+			this.command.format('ivf').outputOption('-deadline', 'realtime');
 			if (checkData.audio) {
+				// @ts-ignore
 				this.audioStream = new AudioStream(this.voiceUdp);
 				// make opus stream
 				this.opusStream = new prism.opus.Encoder({
@@ -126,6 +137,7 @@ class Player extends EventEmitter {
 				this.command.inputOption(
 					'-headers',
 					Object.keys(headers)
+						// @ts-ignore
 						.map((key) => key + ': ' + headers[key])
 						.join('\r\n'),
 				);

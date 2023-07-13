@@ -1,15 +1,13 @@
-import { BaseMediaPacketizer, max_int16bit } from "./BaseMediaPacketizer.js";
+import { BaseMediaPacketizer, max_int16bit } from "./BaseMediaPacketizer";
 
 /**
  * VP8 payload format
  * 
  */
 export class VideoPacketizer extends BaseMediaPacketizer {
-    /*
     _pictureId: number;
-    */
 
-    constructor(connection) {
+    constructor(connection: any) {
         super(connection, 0x67, true);
         this._pictureId = 0;
     }
@@ -19,17 +17,29 @@ export class VideoPacketizer extends BaseMediaPacketizer {
         if(this._pictureId > max_int16bit) this._pictureId = 0;
     }
 
-    createPacket(chunk, isLastPacket = true, isFirstPacket = true) {
-        if(chunk.length > this.mtu) throw Error('error packetizing video frame: frame is larger than mtu');
+    createPacket(chunk: any, isLastPacket = true, isFirstPacket = true) {
+		if (chunk.length > this.mtu)
+			throw Error(
+				'error packetizing video frame: frame is larger than mtu',
+			);
+		// @ts-ignore
+		const packetHeader = this.makeRtpHeader(
+			// @ts-ignore
+			this.connection.voiceConnection.videoSsrc,
+			isLastPacket,
+		);
 
-        const packetHeader = this.makeRtpHeader(this.connection.voiceConnection.videoSsrc, isLastPacket);
+		const packetData = this.makeFrame(chunk, isFirstPacket);
 
-        const packetData = this.makeFrame(chunk, isFirstPacket);
-    
-        // nonce buffer used for encryption. 4 bytes are appended to end of packet
-        const nonceBuffer = this.connection.getNewNonceBuffer();
-        return Buffer.concat([packetHeader, this.encryptData(packetData, nonceBuffer), nonceBuffer.subarray(0, 4)]);
-    }
+		// nonce buffer used for encryption. 4 bytes are appended to end of packet
+		// @ts-ignore
+		const nonceBuffer = this.connection.getNewNonceBuffer();
+		return Buffer.concat([
+			packetHeader,
+			this.encryptData(packetData, nonceBuffer),
+			nonceBuffer.subarray(0, 4),
+		]);
+	}
 
     onFrameSent() {
         // video RTP packet timestamp incremental value = 90,000Hz / fps
@@ -37,7 +47,7 @@ export class VideoPacketizer extends BaseMediaPacketizer {
         this.incrementPictureId();
     }
 
-    makeFrame(frameData, isFirstPacket) {
+    makeFrame(frameData: any, isFirstPacket: any) {
         const headerExtensionBuf = this.createHeaderExtension();
     
         // vp8 payload descriptor

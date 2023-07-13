@@ -1,5 +1,8 @@
+type ErrorCode = keyof typeof ErrorCodes;
+
 class DiscordStreamClientError extends Error {
-    constructor(code) {
+	code: string;
+    constructor(code: ErrorCode) {
         super(ErrorCodes[code] ?? 'Unknown error');
         this.name = "DiscordStreamClientError";
         this.code = code;

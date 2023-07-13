@@ -1,22 +1,16 @@
-import _sodium from 'libsodium-wrappers';
-await _sodium.ready;
-const sodium = _sodium;
-
-const { crypto_secretbox_easy } = sodium;
+import { crypto_secretbox_easy } from 'libsodium-wrappers';
 
 export const max_int16bit = 2 ** 16 - 1;
 export const max_int32bit = 2 ** 32 - 1;
 
 export class BaseMediaPacketizer {
-	/*
     private _payloadType: number;
     private _mtu: number;
     private _sequence: number;
     private _timestamp: number;
-    private _connection: VoiceUdp;
+    private _connection: any;
     private _extensionEnabled: boolean;
-    */
-	constructor(connection, payloadType, extensionEnabled = false) {
+	constructor(connection: any, payloadType: number, extensionEnabled = false) {
 		Object.defineProperty(this, 'connection', { value: connection });
 		this._payloadType = payloadType;
 		this._sequence = 0;
@@ -25,7 +19,7 @@ export class BaseMediaPacketizer {
 		this._extensionEnabled = extensionEnabled;
 	}
 
-	createPacket(chunk, isLastPacket = true, isFirstPacket = true) {
+	createPacket(chunk: any, isLastPacket = true, isFirstPacket = true) {
 		// override this
 		return Buffer.alloc(1);
 	}
@@ -34,7 +28,7 @@ export class BaseMediaPacketizer {
 		// override this
 	}
 
-	partitionVideoData(data) {
+	partitionVideoData(data: any) {
 		let i = 0;
 		let len = data.length;
 
@@ -56,12 +50,12 @@ export class BaseMediaPacketizer {
 		return this._sequence;
 	}
 
-	incrementTimestamp(incrementBy) {
+	incrementTimestamp(incrementBy: any) {
 		this._timestamp += incrementBy;
 		if (this._timestamp > max_int32bit) this._timestamp = 0;
 	}
 
-	makeRtpHeader(ssrc, isLastPacket = true) {
+	makeRtpHeader(ssrc: any, isLastPacket = true) {
 		const packetHeader = Buffer.alloc(12);
 		packetHeader[0] = (2 << 6) | ((this._extensionEnabled ? 1 : 0) << 4); // set version and flags
 		packetHeader[1] = this._payloadType; // set packet payload
@@ -126,10 +120,11 @@ export class BaseMediaPacketizer {
 
 	// encrypts all data that is not in rtp header.
 	// rtp header extensions and payload headers are also encrypted
-	encryptData(message, nonceBuffer) {
+	encryptData(message: any, nonceBuffer: any) {
 		return crypto_secretbox_easy(
 			message,
 			nonceBuffer,
+			// @ts-ignore
 			this.connection.voiceConnection.secretkey,
 		);
 	}

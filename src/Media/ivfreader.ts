@@ -1,7 +1,6 @@
 import fs from "fs";
 import { Transform } from "stream";
 
-/*
 type IvfHeader = {
     signature: string;
     version: number;
@@ -13,31 +12,26 @@ type IvfHeader = {
     timeNumerator: number;
     frameCount: number;
 }
-*/
 
 /*
 ** Transform stream to transform file stream into ivf file
 ** TODO: optimize concats
 */
 class IvfTransformer extends Transform {
-    /*
     public headerSize: number;
     public frameHeaderSize: number;
-    public header: IvfHeader;
-    public buf: Buffer;
+    public header?: IvfHeader;
+    public buf?: Buffer;
     public retFullFrame: boolean;
-    */
 
-    constructor(options) {
+    constructor(options?: any) {
         super(options);
         this.headerSize = 32;
         this.frameHeaderSize = 12;
-        this.header = null;
-        this.buf = null;
         this.retFullFrame = (options && options.fullframe) ? options.fullframe : false;
     }
 
-    _parseHeader(header) {
+    _parseHeader(header: any) {
         // header: Buffer
         const out = {
             signature: header.subarray(0, 4).toString(),
@@ -55,11 +49,11 @@ class IvfTransformer extends Transform {
         this.emit("header", this.header);
     }
 
-    _getFrameSize(buf) {
+    _getFrameSize(buf: any) {
         return buf.readUIntLE(0, 4);
     }
 
-    _parseFrame(frame) {
+    _parseFrame(frame: any) {
         // frame: Buffer
         const size = this._getFrameSize(frame);
 
@@ -74,33 +68,36 @@ class IvfTransformer extends Transform {
         this.push(out.data);
     }
 
-    _appendChunkToBuf(chunk) {
+    _appendChunkToBuf(chunk: any) {
         if (this.buf)
             this.buf = Buffer.concat([this.buf, chunk]);
         else
             this.buf = chunk;
     }
 
-    _updateBufLen(size) {
-        if (this.buf.length > size)
-            this.buf = this.buf.subarray(size, this.buf.length);
-        else
-            this.buf = null;
-    }
+    _updateBufLen(size: any) {
+		// @ts-ignore
+		if (this.buf.length > size)
+			// @ts-ignore
+			this.buf = this.buf.subarray(size, this.buf.length);
+		// @ts-ignore
+		else this.buf = null;
+	}
 
-    _write(chunk, encoding, callback) {
+    _write(chunk: any, encoding: any, callback: any) {
         this._appendChunkToBuf(chunk);
         // parse header
         if (!this.header) {
-            if (this.buf.length >= this.headerSize) {
-                this._parseHeader(this.buf.subarray(0, this.headerSize));
-                this._updateBufLen(this.headerSize);
-            }
-            else {
-                callback();
-                return;
-            }
-        }
+			// @ts-ignore
+			if (this.buf.length >= this.headerSize) {
+				// @ts-ignore
+				this._parseHeader(this.buf.subarray(0, this.headerSize));
+				this._updateBufLen(this.headerSize);
+			} else {
+				callback();
+				return;
+			}
+		}
         
         // parse frame(s)
         while (this.buf && this.buf.length >= this.frameHeaderSize) {
@@ -118,7 +115,7 @@ class IvfTransformer extends Transform {
     }
 }
 
-async function readIvfFile(filepath) {
+async function readIvfFile(filepath: any) {
     const inputStream = fs.createReadStream(filepath);
     
     const stream = new IvfTransformer({ fullframe: true });
@@ -137,20 +134,22 @@ async function readIvfFile(filepath) {
         });
 
         stream.on("data", (frame) => {
-            out.frames.push(frame);
-        });
+			// @ts-ignore
+			out.frames.push(frame);
+		});
     
         stream.on("end", () => {
-            out.frames = Buffer.concat(out.frames);
-            resolve();
-        });
+			// @ts-ignore
+			out.frames = Buffer.concat(out.frames);
+			resolve(true);
+		});
     });
 
     return out;
 }
 
 // get frame, starts at one
-function getFrameFromIvf(file, framenum = 1) {
+function getFrameFromIvf(file: any, framenum = 1) {
     if (!(framenum > 0 && framenum <= file.frameCount))
         return false;
     
@@ -177,7 +176,7 @@ function getFrameFromIvf(file, framenum = 1) {
     }
 }
 
-function getFrameDelayInMilliseconds(file) {
+function getFrameDelayInMilliseconds(file: any) {
     return ((file.timeNumerator / file.timeDenominator) * 1000);
 }
 
