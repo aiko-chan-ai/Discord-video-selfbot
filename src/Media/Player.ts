@@ -15,6 +15,7 @@ class Player extends EventEmitter {
 	audioStream: any;
 	ivfStream: any;
 	opusStream: any;
+	fps?: number;
 	constructor(url: any, voiceUdp: VoiceUDP) {
 		super();
 		this.url = url;
@@ -51,8 +52,7 @@ class Player extends EventEmitter {
 	async play(bitrateVideo?: number, fpsOutput?: number) {
 		const url = this.url;
 		const checkData = await this.validateInputMetadata(url);
-		// @ts-ignore
-		this.videoStream = new VideoStream(this.voiceUdp, this.fps);
+		this.videoStream = new VideoStream(this.voiceUdp as VoiceUDP, this.fps);
 		this.ivfStream = new IvfTransformer();
 
 		// get header frame time
@@ -114,8 +114,7 @@ class Player extends EventEmitter {
 			}
 			this.command.format('ivf').outputOption('-deadline', 'realtime');
 			if (checkData.audio) {
-				// @ts-ignore
-				this.audioStream = new AudioStream(this.voiceUdp);
+				this.audioStream = new AudioStream(this.voiceUdp as VoiceUDP);
 				// make opus stream
 				this.opusStream = new prism.opus.Encoder({
 					channels: 2,

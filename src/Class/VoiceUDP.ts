@@ -1,4 +1,4 @@
-import { createSocket } from 'dgram';
+import { createSocket, Socket } from 'dgram';
 import { isIPv4 } from 'net';
 import { AudioPacketizer } from '../Packet/AudioPacketizer';
 import { VideoPacketizer } from '../Packet/VideoPacketizer';
@@ -20,7 +20,7 @@ function parseLocalPacket(message: any) {
 class VoiceUDP {
 	voiceConnection!: VoiceConnection;
 	nonce: number;
-	socket: any;
+	socket?: Socket;
 	ready: boolean;
 	audioPacketizer: AudioPacketizer;
 	videoPacketizer: VideoPacketizer;
@@ -29,7 +29,6 @@ class VoiceUDP {
 			value: voiceConnection,
 		});
 		this.nonce = 0;
-		this.socket = null;
 		this.ready = false;
 		this.audioPacketizer = new AudioPacketizer(this);
 		this.videoPacketizer = new VideoPacketizer(this);
@@ -55,7 +54,7 @@ class VoiceUDP {
 				} catch (e) {
 					reject(e);
 				}
-				this.socket.on('message', this.handleIncoming);
+				this.socket?.on('message', this.handleIncoming);
 			});
 			this.sendBlankPacket();
 			resolve(true);
@@ -78,7 +77,7 @@ class VoiceUDP {
 		return new Promise((resolve, reject) => {
 			// console.log('SENDING PACKET', packet);
 			try {
-				this.socket.send(
+				this.socket?.send(
 					packet,
 					0,
 					packet.length,
@@ -127,7 +126,7 @@ class VoiceUDP {
 
 	stop() {
 		this.ready = false;
-		this.socket.disconnect();
+		this.socket?.disconnect();
 		return this;
 	}
 

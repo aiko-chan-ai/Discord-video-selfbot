@@ -2,7 +2,6 @@ import { BaseMediaPacketizer, max_int16bit } from "./BaseMediaPacketizer";
 
 /**
  * VP8 payload format
- * 
  */
 export class VideoPacketizer extends BaseMediaPacketizer {
     _pictureId: number;

@@ -1,14 +1,13 @@
 import { Writable } from 'stream';
+import VoiceUDP from '../Class/VoiceUDP';
 
 export class VideoStream extends Writable {
-	/*
-    public udp: VoiceUdp;
+    public udp?: VoiceUDP;
     public count: number;
     public sleepTime: number;
     public startTime: number = -1;
-    */
 
-	constructor(udp, fps = 60) {
+	constructor(udp: VoiceUDP, fps = 60) {
 		super();
 		this.udp = udp;
 		this.count = 0;
@@ -16,11 +15,11 @@ export class VideoStream extends Writable {
 		this.startTime = -1;
 	}
 
-	setSleepTime(time) {
+	setSleepTime(time: number) {
 		this.sleepTime = time;
 	}
 
-	_write(frame, encoding, callback) {
+	_write(frame: any, encoding: any, callback: any) {
 		if (!this.udp) {
 			callback();
 			return;
@@ -35,8 +34,9 @@ export class VideoStream extends Writable {
 		}, next);
 	}
 
+	// @ts-ignore
 	destroy() {
-		this.udp = null;
+		this.udp = undefined;
 		super.destroy();
 	}
 }

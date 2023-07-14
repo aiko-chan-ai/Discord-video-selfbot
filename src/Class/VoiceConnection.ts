@@ -1,5 +1,6 @@
 import WebSocket from 'ws';
 import { VoiceOpCodes } from '../Util/Opcode';
+import StreamConnection from './StreamConnection';
 import { DiscordStreamClient } from '../index';
 import VoiceUDP from './VoiceUDP';
 import { DiscordStreamClientError } from '../Util/Error';
@@ -24,6 +25,7 @@ class VoiceConnection {
 	selfPort?: number;
 	secretkey?: Uint8Array;
 	manager!: DiscordStreamClient;
+	streamConnection?: StreamConnection;
 	constructor(
 		manager: DiscordStreamClient,
 		guildId?: Snowflake,
@@ -122,17 +124,16 @@ class VoiceConnection {
 				mode: 'xsalsa20_poly1305_lite',
 			},
 		});
+		return this;
 	}
-	handleSessionDescription(d: {
-		secret_key: Uint8Array;
-	}) {
+	handleSessionDescription(d: { secret_key: Uint8Array }) {
 		this.secretkey = new Uint8Array(d.secret_key);
 		if (this.udp) {
 			this.udp.ready = true;
 		}
 		return this;
 	}
-	connect(timeout = 30_000, isResume = false) {
+	connect(timeout = 30_000, isResume = false): Promise<this> {
 		return new Promise((resolve, reject) => {
 			if (!this.wsEndpoint || !this.token) {
 				throw new DiscordStreamClientError('MISSING_VOICE_SERVER');
@@ -222,8 +223,7 @@ class VoiceConnection {
 	doIdentify(video = true) {
 		this.sendOpcode(VoiceOpCodes.IDENTIFY, {
 			server_id: this.serverId ?? this.guildId ?? this.channelId,
-			// @ts-ignore
-			user_id: this.manager.client.user.id,
+			user_id: this.manager.client.user?.id,
 			session_id: this.sessionId,
 			token: this.token,
 			video,
@@ -270,6 +270,8 @@ class VoiceConnection {
 		this.ws?.close();
 		this.udp = undefined;
 	}
+	// @ts-ignore
+	createStream(): Promise<this> {}
 }
 
 export default VoiceConnection;
