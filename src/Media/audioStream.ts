@@ -6,6 +6,7 @@ class AudioStream extends Writable {
 	count: number;
 	sleepTime: number;
 	startTime: number | null;
+
 	constructor(udp: VoiceUDP) {
 		super();
 		this.udp = udp;

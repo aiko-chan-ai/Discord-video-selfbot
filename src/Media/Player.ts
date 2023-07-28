@@ -44,6 +44,7 @@ class Player extends EventEmitter {
 				if (err) reject(err);
 				instance.removeAllListeners();
 				this.metadata = metadata;
+				if (!this.metadata?.streams) return reject(new Error('No metadata'));
 				resolve({
 					audio: metadata.streams.some(
 						(s) => s.codec_type === 'audio',
