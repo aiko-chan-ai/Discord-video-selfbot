@@ -5,9 +5,24 @@ import prism from 'prism-media';
 import { VideoStream } from './videoStream';
 import { AudioStream } from './audioStream';
 import { StreamOutput } from '@dank074/fluent-ffmpeg-multistream-ts';
-import { formatDuration } from '../Util/Util';
+import { formatDuration, getResolutionData } from '../Util/Util';
 import EventEmitter from 'events';
 import VoiceUDP from '../Class/VoiceUDP';
+
+interface PlayOptions {
+	kbpsVideo?: number;
+	kbpsAudio?: number;
+	fps?: number;
+	hwaccel?: boolean;
+	volume?: number;
+}
+
+interface Player {
+	on(event: 'finish', listener: () => void): this;
+	on(event: 'finishVideo', listener: () => void): this;
+	on(event: 'finishAudio', listener: () => void): this;
+	on(event: 'error', listener: (error: Error) => void): this;
+}
 
 class Player extends EventEmitter {
 	url: any;
@@ -22,6 +37,7 @@ class Player extends EventEmitter {
 	metadata?: ffmpeg.FfprobeData;
 	#startTime: number = 0;
 	#cachedDuration: number = 0;
+	playOptions?: PlayOptions;
 	constructor(url: any, voiceUdp: VoiceUDP) {
 		super();
 		this.url = url;
@@ -37,6 +53,18 @@ class Player extends EventEmitter {
 		video: boolean;
 	}> {
 		return new Promise((resolve, reject) => {
+			if (this.metadata) {
+				if (!this.metadata?.streams)
+					return reject(new Error('No metadata'));
+				return resolve({
+					audio: this.metadata.streams.some(
+						(s) => s.codec_type === 'audio',
+					),
+					video: this.metadata.streams.some(
+						(s) => s.codec_type === 'video',
+					),
+				});
+			}
 			const instance = ffmpeg(input).on('error', (err, stdout, stderr) =>
 				reject(err),
 			);
@@ -44,7 +72,8 @@ class Player extends EventEmitter {
 				if (err) reject(err);
 				instance.removeAllListeners();
 				this.metadata = metadata;
-				if (!this.metadata?.streams) return reject(new Error('No metadata'));
+				if (!this.metadata?.streams)
+					return reject(new Error('No metadata'));
 				resolve({
 					audio: metadata.streams.some(
 						(s) => s.codec_type === 'audio',
@@ -57,7 +86,11 @@ class Player extends EventEmitter {
 			});
 		});
 	}
-	async play(bitrateVideo?: number, fpsOutput?: number, hwaccel?: boolean) {
+	async play(options: PlayOptions = {}) {
+		if (typeof options !== 'object' || Array.isArray(options)) {
+			options = {};
+		}
+		this.playOptions = options;
 		const url = this.url;
 		const checkData = await this.validateInputMetadata(url);
 		this.videoStream = new VideoStream(this.voiceUdp as VoiceUDP, this.fps);
@@ -89,6 +122,7 @@ class Player extends EventEmitter {
 			this.command = ffmpeg(url)
 				.inputOption('-re')
 				.addOption('-loglevel', '0')
+				.addOption('-preset', 'ultrafast')
 				.addOption('-fflags', 'nobuffer')
 				.addOption('-analyzeduration', '0')
 				.addOption('-flags', 'low_delay')
@@ -111,18 +145,45 @@ class Player extends EventEmitter {
 					end: false,
 				})
 				.noAudio();
-			if (hwaccel === true) {
+			const videoResolutionData = getResolutionData(
+				this.voiceUdp?.voiceConnection?.manager?.resolution ?? 'auto',
+			);
+			const videoStream = this.metadata?.streams.find(
+				(s) => s.codec_type === 'video',
+			);
+			if (
+				videoResolutionData.type === 'fixed' &&
+				videoStream &&
+				videoStream.height &&
+				videoStream.height > videoResolutionData.height
+			) {
+				this.command.size(`?x${videoResolutionData.height}`);
+			}
+			if (options?.hwaccel === true) {
 				this.command.inputOption('-hwaccel', 'auto');
 			}
 			if (
-				bitrateVideo &&
-				typeof bitrateVideo === 'number' &&
-				bitrateVideo > 0
+				options?.kbpsVideo &&
+				typeof options?.kbpsVideo === 'number' &&
+				options?.kbpsVideo > 0
 			) {
-				this.command.videoBitrate(`${bitrateVideo}k`);
+				this.command.videoBitrate(`${options?.kbpsVideo}k`);
+			} else {
+				const bitrate =
+					(videoResolutionData.fps *
+						videoResolutionData.width *
+						videoResolutionData.height *
+						0.1 || videoResolutionData.bitrate) / 1_000_000;
+				this.command.videoBitrate(
+					`${Number(bitrate.toFixed(1)) * 1000}k`,
+				);
 			}
-			if (fpsOutput && typeof fpsOutput === 'number' && fpsOutput > 0) {
-				this.command.fpsOutput(fpsOutput);
+			if (
+				options?.fps &&
+				typeof options?.fps === 'number' &&
+				options?.fps > 0
+			) {
+				this.command.fpsOutput(options?.fps);
 			}
 			this.command.format('ivf').outputOption('-deadline', 'realtime');
 			if (checkData.audio) {
@@ -143,8 +204,25 @@ class Player extends EventEmitter {
 					.noVideo()
 					.audioChannels(2)
 					.audioFrequency(48000)
-					//.audioBitrate('128k')
 					.format('s16le');
+				if (
+					options?.kbpsAudio &&
+					typeof options?.kbpsAudio === 'number' &&
+					options?.kbpsAudio > 0
+				) {
+					this.command.audioBitrate(`${options?.kbpsAudio}k`);
+				} else {
+					this.command.audioBitrate('128k');
+				}
+				if (
+					options.volume &&
+					typeof options.volume === 'number' &&
+					options.volume >= 0
+				) {
+					this.command.audioFilters(
+						`volume=${(options.volume / 100).toFixed(1)}`,
+					);
+				}
 			}
 			if (isHttpUrl) {
 				this.command.inputOption(

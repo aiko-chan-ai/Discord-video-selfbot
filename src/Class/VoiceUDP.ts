@@ -39,7 +39,7 @@ class VoiceUDP {
 			this.socket = createSocket('udp4');
 
 			this.socket.on('error', (error: any) => {
-				console.error('Error connecting to media udp server', error);
+				this.voiceConnection.manager.emit('debug', 'VoideUDP', error);
 			});
 
 			this.socket.once('message', (message: any) => {
@@ -126,7 +126,11 @@ class VoiceUDP {
 
 	stop() {
 		this.ready = false;
-		this.socket?.disconnect();
+		try {
+			this.socket?.disconnect();
+		} catch (e) {
+			// ERR_SOCKET_DGRAM_NOT_CONNECTED
+		}
 		return this;
 	}
 

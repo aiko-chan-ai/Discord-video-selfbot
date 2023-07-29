@@ -1,10 +1,16 @@
+import { EventEmitter } from 'events';
 import { GatewayOpCodes } from './Util/Opcode';
 import VoiceConnection from './Class/VoiceConnection';
 import StreamConnection from './Class/StreamConnection';
 import Player from './Media/Player';
 import VoiceUDP from './Class/VoiceUDP';
-import { Client, VoiceChannel, VoiceChannelResolvable } from 'discord.js-selfbot-v13';
+import {
+	Client,
+	VoiceChannel,
+	VoiceChannelResolvable,
+} from 'discord.js-selfbot-v13';
 import { DiscordStreamClientError, ErrorCodes } from './Util/Error';
+import { ResolutionType } from './Util/Util';
 
 declare module 'discord.js-selfbot-v13' {
 	interface Client {
@@ -12,7 +18,12 @@ declare module 'discord.js-selfbot-v13' {
 	}
 }
 
-class DiscordStreamClient {
+interface DiscordStreamClient {
+	on(event: 'error', listener: (error: Error) => void): this;
+	on(event: 'debug', listener: (type: 'VoiceConnection' | 'VoiceUDP' | string, message: string) => void): this;
+}
+
+class DiscordStreamClient extends EventEmitter {
 	client!: Client;
 	connection?: VoiceConnection;
 	channel?: VoiceChannel;
@@ -20,7 +31,9 @@ class DiscordStreamClient {
 	selfMute: boolean;
 	selfVideo: boolean;
 	player?: Player;
+	resolution: ResolutionType = '1080p';
 	constructor(client: Client) {
+		super();
 		if (!client || !(client instanceof Client))
 			throw new DiscordStreamClientError('NO_CLIENT');
 		Object.defineProperty(this, 'client', { value: client });
@@ -47,49 +60,70 @@ class DiscordStreamClient {
 		} else if (event === 'VOICE_SERVER_UPDATE') {
 			this.streamClient.connection?.setServer(data);
 		} else if (event === 'STREAM_CREATE') {
-			const [type, guildId, channelId, userId] =
-				data.stream_key.split(':');
-			if (this.streamClient.connection?.guildId != guildId) return;
-			if (userId === this.user.id) {
-				(
-					(this.streamClient.connection as VoiceConnection)
-						.streamConnection as StreamConnection
-				).serverId = data.rtc_server_id;
-				(
-					(this.streamClient.connection as VoiceConnection)
-						.streamConnection as StreamConnection
-				).streamKey = data.stream_key;
-				(
-					(this.streamClient.connection as VoiceConnection)
-						.streamConnection as StreamConnection
-				).setSession(this.streamClient.connection?.sessionId as string);
+			const StreamKey = data.stream_key.split(':');
+			if (StreamKey[0] == 'guild') {
+				const [type, guildId, channelId, userId] = StreamKey;
+				if (this.streamClient.connection?.guildId != guildId) return;
+				if (userId === this.user.id) {
+					(
+						(this.streamClient.connection as VoiceConnection)
+							.streamConnection as StreamConnection
+					).serverId = data.rtc_server_id;
+					(
+						(this.streamClient.connection as VoiceConnection)
+							.streamConnection as StreamConnection
+					).streamKey = data.stream_key;
+					(
+						(this.streamClient.connection as VoiceConnection)
+							.streamConnection as StreamConnection
+					).setSession(
+						this.streamClient.connection?.sessionId as string,
+					);
+				}
+			} else if (StreamKey[0] == 'call') {
+				// Todo
 			}
 		} else if (event === 'STREAM_SERVER_UPDATE') {
-			const [type, guildId, channelId, userId] =
-				data.stream_key.split(':');
-			if (
-				(this.streamClient.connection as VoiceConnection).guildId !=
-				guildId
-			)
-				return;
-			if (userId === this.user.id) {
-				(
-					(this.streamClient.connection as VoiceConnection)
-						.streamConnection as StreamConnection
-				).setServer(data);
+			const StreamKey = data.stream_key.split(':');
+			if (StreamKey[0] == 'guild') {
+				const [type, guildId, channelId, userId] = StreamKey;
+				if (
+					(this.streamClient.connection as VoiceConnection).guildId !=
+					guildId
+				)
+					return;
+				if (userId === this.user.id) {
+					(
+						(this.streamClient.connection as VoiceConnection)
+							.streamConnection as StreamConnection
+					).setServer(data);
+				}
+			} else if (StreamKey[0] == 'call') {
+				// Todo
 			}
 		} else if (event === 'STREAM_DELETE') {
-			const [type, guildId, channelId, userId] =
-				data.stream_key.split(':');
-			if (
-				(this.streamClient.connection as VoiceConnection).guildId !=
-				guildId
-			)
-				return;
-			if (userId === this.user.id) {
-				(this.streamClient.connection as VoiceConnection).disconnect();
+			const StreamKey = data.stream_key.split(':');
+			if (StreamKey[0] == 'guild') {
+				const [type, guildId, channelId, userId] = StreamKey;
+				if (
+					(this.streamClient.connection as VoiceConnection).guildId !=
+					guildId
+				)
+					return;
+				if (userId === this.user.id) {
+					(
+						this.streamClient.connection as VoiceConnection
+					).disconnect();
+				}
+			} else if (StreamKey[0] == 'call') {
+				// Todo
 			}
 		}
+	}
+	setResolution(resolution: ResolutionType) {
+		if (!['1440p', '1080p', '720p', '480p', 'auto'].includes(resolution))
+			throw new DiscordStreamClientError('INVALID_RESOLUTION');
+		this.resolution = resolution;
 	}
 	signalVoiceChannel(
 		{ selfDeaf, selfMute, selfVideo } = {} as {
@@ -177,6 +211,7 @@ class DiscordStreamClient {
 		this.unpatch();
 		this.channel = undefined;
 		this.signalVoiceChannel();
+		this.connection?.disconnect();
 		this.connection = undefined;
 	}
 	signalScreenShare() {
@@ -224,6 +259,24 @@ class DiscordStreamClient {
 				paused: isPause,
 			},
 		});
+	}
+	stopScreenShare() {
+		if (!this.connection?.streamConnection) return;
+		if (!this.channel || !this.channel.isVoice())
+			throw new DiscordStreamClientError('MISSING_VOICE_CHANNEL');
+		let streamKey = `guild:${this.channel.guildId}:${this.channel.id}:${this.client.user?.id}`;
+		if (['DM', 'GROUP_DM'].includes(this.channel.type)) {
+			throw new DiscordStreamClientError('CHANNEL_TYPE_NOT_SUPPORTED');
+			streamKey = `call:${this.channel?.id}:${this.client.user?.id}`;
+		}
+		(this.client.ws as any).broadcast({
+			// @ts-ignore
+			op: GatewayOpCodes.STREAM_DELETE,
+			d: {
+				stream_key: streamKey,
+			},
+		});
+		this.connection.streamConnection = undefined;
 	}
 	createPlayer(path: any, udpConnection: VoiceUDP) {
 		if (!this.connection)

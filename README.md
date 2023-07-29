@@ -40,6 +40,8 @@ If you are on Windows, you can download it from the official ffmpeg website: htt
 
 ## Usage
 
+> # Example: [Repo](https://github.com/aiko-chan-ai/Discord-SB-Steam)
+
 Install the package, alongside its peer-dependency discord.js-selfbot-v13:
 
 ```
@@ -55,6 +57,8 @@ import { DiscordStreamClient } from 'discord-stream-client';
 
 const client = new Client();
 const StreamClient = new DiscordStreamClient(client);
+
+StreamClient.setResolution('720p');
 
 const token = 'token';
 
@@ -77,7 +81,7 @@ const voiceConnection = await StreamClient.joinVoiceChannel(
 const streamConnection = await voiceConnection.createStream();
 // Create a player
 const player = StreamClient.createPlayer(
-	'https://dl2.issou.best/ordr/videos/render1046454.mp4', // DIRECT VIDEO URL OR READABLE STREAM HERE
+	'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', // DIRECT VIDEO URL OR READABLE STREAM HERE
 	streamConnection.udp, // UDP connection
 );
 // Events

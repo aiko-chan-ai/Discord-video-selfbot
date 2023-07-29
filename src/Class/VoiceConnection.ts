@@ -5,6 +5,7 @@ import { DiscordStreamClient } from '../index';
 import VoiceUDP from './VoiceUDP';
 import { DiscordStreamClientError } from '../Util/Error';
 import { Snowflake } from 'discord.js-selfbot-v13';
+import { getResolutionData } from '../Util/Util';
 
 class VoiceConnection {
 	serverId!: Snowflake;
@@ -96,6 +97,7 @@ class VoiceConnection {
 					priority: 1000,
 					payload_type: 120,
 				},
+				/*
 				{
 					name: 'H264',
 					type: 'video',
@@ -103,6 +105,7 @@ class VoiceConnection {
 					payload_type: 101,
 					rtx_payload_type: 102,
 				},
+				*/
 				{
 					name: 'VP8',
 					type: 'video',
@@ -110,6 +113,7 @@ class VoiceConnection {
 					payload_type: 103,
 					rtx_payload_type: 104,
 				},
+				/*
 				{
 					name: 'VP9',
 					type: 'video',
@@ -117,6 +121,7 @@ class VoiceConnection {
 					payload_type: 105,
 					rtx_payload_type: 106,
 				},
+				*/
 			],
 			data: {
 				address: this.selfIp,
@@ -154,13 +159,17 @@ class VoiceConnection {
 				}
 			});
 			this.ws.on('error', (err) => {
-				console.error(err);
+				this.manager.emit('error', 'VoiceConnection', err);
 			});
 			this.ws.on('close', (code) => {
-				// console.log('Voice connection closed', code);
+				this.manager.emit(
+					'debug',
+					'VoiceConnection',
+					`Voice connection closed ${code}`,
+				);
 				clearInterval(this.heartbeatInterval);
 				this.heartbeatInterval = undefined;
-				if (code === 4_015 || code < 4_000) {
+				if (code === 4_015) {
 					this.connect(timeout, true);
 				}
 			});
@@ -195,14 +204,32 @@ class VoiceConnection {
 					}
 					default: {
 						if (op >= 4_000) {
-							console.error('Voice connection error', d);
+							this.manager.emit(
+								'debug',
+								'VoiceConnection',
+								`Voice connection error ${op}`,
+								d,
+							);
 						}
-						// console.log('Voice connection unknown', { op, d });
 					}
 				}
 			});
 			let timeoutId = setTimeout(() => {
-				throw new DiscordStreamClientError('JOIN_VOICE_CHANNEL_FAILED');
+				clearInterval(i);
+				this.manager.emit(
+					'debug',
+					'VoiceConnection',
+					`Voice connection timed out ${
+						isResume ? 'with' : 'without'
+					} resume`,
+				);
+				if (isResume) {
+					this.doResume();
+				} else {
+					throw new DiscordStreamClientError(
+						'JOIN_VOICE_CHANNEL_FAILED',
+					);
+				}
 			}, timeout).unref();
 			let i = setInterval(() => {
 				if (this.isReady) {
@@ -235,6 +262,7 @@ class VoiceConnection {
 		this.ws?.send(JSON.stringify({ op, d: data }));
 	}
 	setVideoStatus(bool: boolean) {
+		const videoData = getResolutionData(this.manager?.resolution);
 		this.sendOpcode(VoiceOpCodes.SOURCES, {
 			audio_ssrc: this.ssrc,
 			video_ssrc: bool ? this.videoSsrc : 0,
@@ -247,12 +275,12 @@ class VoiceConnection {
 					active: true,
 					quality: 100,
 					rtx_ssrc: bool ? this.rtxSsrc : 0,
-					max_bitrate: 2500000,
-					max_framerate: 60,
+					max_bitrate: videoData.bitrate,
+					max_framerate: videoData.fps,
 					max_resolution: {
-						type: 'fixed',
-						width: 1920,
-						height: 1080,
+						type: videoData.type,
+						width: videoData.width,
+						height: videoData.height,
 					},
 				},
 			],
@@ -268,7 +296,7 @@ class VoiceConnection {
 	}
 	disconnect() {
 		this.ws?.close();
-		this.udp = undefined;
+		this.udp?.stop();
 	}
 	// @ts-ignore
 	createStream(): Promise<this> {}
