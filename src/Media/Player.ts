@@ -265,6 +265,7 @@ class Player extends EventEmitter {
 	pause() {
 		if (!this.command) throw new Error('Not playing');
 		util.pause(this.command);
+		this.voiceUdp?.voiceConnection.manager.pauseScreenShare(true);
 		this.#isPaused = true;
 		this.#cachedDuration = Date.now() - this.#startTime;
 		return this;
@@ -272,6 +273,7 @@ class Player extends EventEmitter {
 	resume() {
 		if (!this.command) throw new Error('Not playing');
 		util.resume(this.command);
+		this.voiceUdp?.voiceConnection.manager.pauseScreenShare(false);
 		this.#isPaused = false;
 		this.#startTime = Date.now() - this.#cachedDuration;
 		return this;
