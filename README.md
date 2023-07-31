@@ -40,7 +40,7 @@ If you are on Windows, you can download it from the official ffmpeg website: htt
 
 ## Usage
 
-> # Example: [Repo](https://github.com/aiko-chan-ai/Discord-SB-Steam)
+> # Example: [Repo](https://github.com/aiko-chan-ai/Discord-SB-Stream)
 
 Install the package, alongside its peer-dependency discord.js-selfbot-v13:
 

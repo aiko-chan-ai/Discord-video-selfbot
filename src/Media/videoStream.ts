@@ -27,8 +27,15 @@ export class VideoStream extends Writable {
 		this.count++;
 		if (this.startTime === -1) this.startTime = Date.now();
 		this.udp.sendVideoFrame(frame);
-		const next =
+		let next =
 			(this.count + 1) * this.sleepTime - (Date.now() - this.startTime);
+		if (next < 0) {
+			this.count = 0;
+			this.startTime = Date.now();
+			next =
+				(this.count + 1) * this.sleepTime -
+				(Date.now() - this.startTime);
+		}
 		setTimeout(() => {
 			callback();
 		}, next);
