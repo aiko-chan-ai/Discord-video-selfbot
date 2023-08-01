@@ -8,6 +8,8 @@ import { StreamOutput } from '@dank074/fluent-ffmpeg-multistream-ts';
 import { formatDuration, getResolutionData } from '../Util/Util';
 import EventEmitter from 'events';
 import VoiceUDP from '../Class/VoiceUDP';
+import { Readable } from 'stream';
+import { DiscordStreamClientError, ErrorCodes, ErrorCode } from '../Util/Error';
 
 interface PlayOptions {
 	kbpsVideo?: number;
@@ -17,36 +19,76 @@ interface PlayOptions {
 	volume?: number;
 }
 
+interface PlayerEvents {
+	spawnProcess: (commandLine: string) => void;
+	codecData: (data: {
+		format: any;
+		duration: any;
+		audio: any;
+		video: any;
+		audio_details: any;
+		video_details: any;
+	}) => void;
+	progress: (progress: {
+		frames: any;
+		currentFps: any;
+		currentKbps: any;
+		targetSize: any;
+		timemark: any;
+		percent: any;
+	}) => void;
+	vp8Header: (header: {
+		signature: string;
+		version: number;
+		headerLength: number;
+		codec: string;
+		width: number;
+		height: number;
+		timeDenominator: number;
+		timeNumerator: number;
+		frameCount: number;
+	}) => void;
+	finish: () => void;
+	finishVideo: () => void;
+	finishAudio: () => void;
+	error: (error: Error, stdout: any, stderr: any) => void;
+}
+
 interface Player {
-	on(event: 'finish', listener: () => void): this;
-	on(event: 'finishVideo', listener: () => void): this;
-	on(event: 'finishAudio', listener: () => void): this;
-	on(event: 'error', listener: (error: Error) => void): this;
+	on<U extends keyof PlayerEvents>(
+		event: U,
+		listener: PlayerEvents[U],
+	): this;
+	once<U extends keyof PlayerEvents>(
+		event: U,
+		listener: PlayerEvents[U],
+	): this;
 }
 
 class Player extends EventEmitter {
-	url: any;
-	voiceUdp?: VoiceUDP;
-	command: ffmpeg.FfmpegCommand | null;
-	videoStream: any;
-	audioStream: any;
-	ivfStream: any;
-	opusStream: any;
-	fps?: number;
+	playable!: string | Readable;
+	voiceUdp!: VoiceUDP;
+	command?: ffmpeg.FfmpegCommand;
+	videoStream!: VideoStream;
+	audioStream?: AudioStream;
+	ivfStream!: IvfTransformer;
+	opusStream?: prism.opus.Encoder;
+	fps: number = 60;
 	#isPaused: boolean = false;
 	metadata?: ffmpeg.FfprobeData;
 	#startTime: number = 0;
 	#cachedDuration: number = 0;
 	playOptions?: PlayOptions;
-	constructor(url: any, voiceUdp: VoiceUDP) {
+	constructor(playable: string | Readable, voiceUdp: VoiceUDP) {
 		super();
-		this.url = url;
+		if (typeof playable !== 'string' && !playable.readable) {
+			throw new DiscordStreamClientError('PLAYER_MISSING_PLAYABLE');
+		}
+		if (!(voiceUdp instanceof VoiceUDP)) {
+			throw new DiscordStreamClientError('PLAYER_MISSING_VOICE_UDP');
+		}
+		this.playable = playable;
 		this.voiceUdp = voiceUdp;
-		this.command = null;
-		this.videoStream = null;
-		this.audioStream = null;
-		this.ivfStream = null;
-		this.opusStream = null;
 	}
 	validateInputMetadata(input: any): Promise<{
 		audio: boolean;
@@ -55,7 +97,9 @@ class Player extends EventEmitter {
 		return new Promise((resolve, reject) => {
 			if (this.metadata) {
 				if (!this.metadata?.streams)
-					return reject(new Error('No metadata'));
+					return reject(
+						new DiscordStreamClientError('STREAM_INVALID'),
+					);
 				return resolve({
 					audio: this.metadata.streams.some(
 						(s) => s.codec_type === 'audio',
@@ -73,7 +117,9 @@ class Player extends EventEmitter {
 				instance.removeAllListeners();
 				this.metadata = metadata;
 				if (!this.metadata?.streams)
-					return reject(new Error('No metadata'));
+					return reject(
+						new DiscordStreamClientError('STREAM_INVALID'),
+					);
 				resolve({
 					audio: metadata.streams.some(
 						(s) => s.codec_type === 'audio',
@@ -86,184 +132,217 @@ class Player extends EventEmitter {
 			});
 		});
 	}
-	async play(options: PlayOptions = {}) {
-		if (typeof options !== 'object' || Array.isArray(options)) {
-			options = {};
-		}
-		this.playOptions = options;
-		const url = this.url;
-		const checkData = await this.validateInputMetadata(url);
-		this.videoStream = new VideoStream(this.voiceUdp as VoiceUDP, this.fps);
-		this.ivfStream = new IvfTransformer();
-		// get header frame time
-		this.ivfStream.on('header', (header: any) => {
-			this.videoStream.setSleepTime(getFrameDelayInMilliseconds(header));
-		});
-
-		this.videoStream.on('finish', () => {
-			this.emit('finishVideo');
-		});
-
-		const headers = {
-			'User-Agent':
-				'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.3',
-			Connection: 'keep-alive',
-		};
-
-		let isHttpUrl = false;
-		let isHls = false;
-
-		if (typeof url === 'string') {
-			isHttpUrl = url.startsWith('http') || url.startsWith('https');
-			isHls = url.includes('m3u');
-		}
-
-		try {
-			this.command = ffmpeg(url)
-				.inputOption('-re')
-				.addOption('-loglevel', '0')
-				.addOption('-preset', 'ultrafast')
-				.addOption('-fflags', 'nobuffer')
-				.addOption('-analyzeduration', '0')
-				.addOption('-flags', 'low_delay')
-				.on('end', () => {
-					this.emit('finish');
-				})
-				.on('error', (err, stdout, stderr) => {
-					this.command = null;
-					if (
-						err.message.includes(
-							'ffmpeg was killed with signal SIGINT',
-						) ||
-						err.message.includes('ffmpeg exited with code 255')
-					) {
-						return;
-					}
-					this.emit('error', err);
-				})
-				.output(StreamOutput(this.ivfStream).url, {
-					end: false,
-				})
-				.noAudio();
-			const videoResolutionData = getResolutionData(
-				this.voiceUdp?.voiceConnection?.manager?.resolution ?? 'auto',
-			);
-			const videoStream = this.metadata?.streams.find(
-				(s) => s.codec_type === 'video',
-			);
-			if (
-				videoResolutionData.type === 'fixed' &&
-				videoStream &&
-				videoStream.height &&
-				videoStream.height > videoResolutionData.height
-			) {
-				this.command.size(`?x${videoResolutionData.height}`);
+	play(options: PlayOptions = {}): Promise<boolean> {
+		return new Promise(async (resolve, reject) => {
+			if (typeof options !== 'object' || Array.isArray(options)) {
+				options = {};
 			}
-			if (options?.hwaccel === true) {
-				this.command.inputOption('-hwaccel', 'auto');
-			}
-			if (
-				options?.kbpsVideo &&
-				typeof options?.kbpsVideo === 'number' &&
-				options?.kbpsVideo > 0
-			) {
-				this.command.videoBitrate(`${options?.kbpsVideo}k`);
-			} else {
-				const bitrate =
-					(videoResolutionData.fps *
-						videoResolutionData.width *
-						videoResolutionData.height *
-						0.1 || videoResolutionData.bitrate) / 1_000_000;
-				this.command.videoBitrate(
-					`${Number(bitrate.toFixed(1)) * 1000}k`,
+			this.playOptions = options;
+			const checkData = await this.validateInputMetadata(this.playable);
+			this.videoStream = new VideoStream(
+				this.voiceUdp as VoiceUDP,
+				this.fps,
+			);
+			this.ivfStream = new IvfTransformer();
+			// get header frame time
+			this.ivfStream.on('header', (header: any) => {
+				(this.videoStream as VideoStream).setSleepTime(
+					getFrameDelayInMilliseconds(header),
 				);
+				this.emit('vp8Header', header);
+				this.#startTime = Date.now();
+				this.#isPaused = false;
+			});
+
+			this.videoStream.on('finish', () => {
+				this.emit('finishVideo');
+			});
+
+			const headers: { [key: string]: string } = {
+				'User-Agent':
+					'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.3',
+				Connection: 'keep-alive',
+			};
+
+			let isHttpUrl = false;
+			let isHls = false;
+
+			if (typeof this.playable === 'string') {
+				isHttpUrl =
+					this.playable.startsWith('http') ||
+					this.playable.startsWith('https');
+				isHls = this.playable.includes('m3u');
 			}
-			if (
-				options?.fps &&
-				typeof options?.fps === 'number' &&
-				options?.fps > 0
-			) {
-				this.command.fpsOutput(options?.fps);
-			}
-			this.command.format('ivf').outputOption('-deadline', 'realtime');
-			if (checkData.audio) {
-				this.audioStream = new AudioStream(this.voiceUdp as VoiceUDP);
-				// make opus stream
-				this.opusStream = new prism.opus.Encoder({
-					channels: 2,
-					rate: 48000,
-					frameSize: 960,
-				});
-				this.audioStream.on('finish', () => {
-					this.emit('finishAudio');
-				});
-				this.command
-					.output(StreamOutput(this.opusStream).url, {
+
+			try {
+				this.command = ffmpeg(this.playable)
+					.inputOption('-re')
+					.addOption('-loglevel', '0')
+					.addOption('-preset', 'ultrafast')
+					.addOption('-fflags', 'nobuffer')
+					.addOption('-analyzeduration', '0')
+					.addOption('-flags', 'low_delay')
+					.on('end', () => {
+						this.emit('finish');
+						resolve(true);
+					})
+					.on('error', (err, stdout, stderr) => {
+						this.command = undefined;
+						if (
+							err.message.includes(
+								'ffmpeg was killed with signal SIGINT',
+							) ||
+							err.message.includes('ffmpeg exited with code 255')
+						) {
+							return;
+						}
+						this.emit('error', err, stdout, stderr);
+						reject(err);
+					})
+					.on('start', (commandLine) => {
+						this.emit('spawnProcess', commandLine);
+					})
+					.on('codecData', (data) => {
+						this.emit('codecData', data);
+					})
+					.on('progress', (progress) => {
+						this.emit('progress', progress);
+					})
+					.output(StreamOutput(this.ivfStream).url, {
 						end: false,
 					})
-					.noVideo()
-					.audioChannels(2)
-					.audioFrequency(48000)
-					.format('s16le');
-				if (
-					options?.kbpsAudio &&
-					typeof options?.kbpsAudio === 'number' &&
-					options?.kbpsAudio > 0
-				) {
-					this.command.audioBitrate(`${options?.kbpsAudio}k`);
-				} else {
-					this.command.audioBitrate('128k');
-				}
-				if (
-					options.volume &&
-					typeof options.volume === 'number' &&
-					options.volume >= 0
-				) {
-					this.command.audioFilters(
-						`volume=${(options.volume / 100).toFixed(1)}`,
-					);
-				}
-			}
-			if (isHttpUrl) {
-				this.command.inputOption(
-					'-headers',
-					Object.keys(headers)
-						// @ts-ignore
-						.map((key) => key + ': ' + headers[key])
-						.join('\r\n'),
+					.noAudio();
+				const videoResolutionData = getResolutionData(
+					this.voiceUdp?.voiceConnection?.manager?.resolution ??
+						'auto',
 				);
-				if (!isHls)
-					this.command.inputOptions(
-						'-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 4294'.split(
-							' ',
-						),
+				const videoStream = this.metadata?.streams.find(
+					(s) => s.codec_type === 'video',
+				);
+				if (
+					videoResolutionData.type === 'fixed' &&
+					videoStream &&
+					videoStream.height &&
+					videoStream.height > videoResolutionData.height
+				) {
+					this.command.size(`?x${videoResolutionData.height}`);
+				}
+				if (options?.hwaccel === true) {
+					this.command.inputOption('-hwaccel', 'auto');
+				}
+				if (
+					options?.kbpsVideo &&
+					typeof options?.kbpsVideo === 'number' &&
+					options?.kbpsVideo > 0
+				) {
+					this.command.videoBitrate(`${options?.kbpsVideo}k`);
+				} else {
+					const bitrate =
+						(videoResolutionData.fps *
+							videoResolutionData.width *
+							videoResolutionData.height *
+							0.1 || videoResolutionData.bitrate) / 1_000_000;
+					this.command.videoBitrate(
+						`${Number(bitrate.toFixed(1)) * 1000}k`,
 					);
+				}
+				if (
+					options?.fps &&
+					typeof options?.fps === 'number' &&
+					options?.fps > 0
+				) {
+					this.command.fpsOutput(options?.fps);
+				}
+				this.command
+					.format('ivf')
+					.outputOption('-deadline', 'realtime');
+				if (checkData.audio) {
+					this.audioStream = new AudioStream(
+						this.voiceUdp as VoiceUDP,
+					);
+					// make opus stream
+					this.opusStream = new prism.opus.Encoder({
+						channels: 2,
+						rate: 48000,
+						frameSize: 960,
+					});
+					this.audioStream.on('finish', () => {
+						this.emit('finishAudio');
+					});
+					this.command
+						.output(StreamOutput(this.opusStream).url, {
+							end: false,
+						})
+						.noVideo()
+						.audioChannels(2)
+						.audioFrequency(48000)
+						.format('s16le');
+					if (
+						options?.kbpsAudio &&
+						typeof options?.kbpsAudio === 'number' &&
+						options?.kbpsAudio > 0
+					) {
+						this.command.audioBitrate(`${options?.kbpsAudio}k`);
+					} else {
+						this.command.audioBitrate('128k');
+					}
+					if (
+						options.volume &&
+						typeof options.volume === 'number' &&
+						options.volume >= 0
+					) {
+						this.command.audioFilters(
+							`volume=${(options.volume / 100).toFixed(1)}`,
+						);
+					}
+				}
+				if (isHttpUrl) {
+					this.command.inputOption(
+						'-headers',
+						Object.keys(headers)
+							.map((key) => key + ': ' + headers[key])
+							.join('\r\n'),
+					);
+					if (!isHls)
+						this.command.inputOptions(
+							'-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 4294'.split(
+								' ',
+							),
+						);
+				}
+				this.command.run();
+				this.ivfStream.pipe(this.videoStream, { end: false });
+				this.opusStream?.pipe(this.audioStream as AudioStream, {
+					end: false,
+				});
+			} catch (e) {
+				this.command = undefined;
+				reject(e);
 			}
-			this.command.run();
-			this.#startTime = Date.now();
-			this.#isPaused = false;
-			this.ivfStream.pipe(this.videoStream, { end: false });
-			this.opusStream?.pipe(this.audioStream, { end: false });
-		} catch (e) {
-			this.command = null;
-			this.emit('error', e);
-		}
+		})
 	}
 	stop() {
+		return this.#stop(true);
+	}
+	#stop(isCleanData: boolean = true) {
 		if (this.command) {
 			this.ivfStream.destroy();
 			this.opusStream?.destroy();
 			this.audioStream?.destroy();
 			this.videoStream.destroy();
 			this.command.kill('SIGINT');
-			this.command = null;
+			this.command = undefined;
 			this.#isPaused = true;
-			this.#startTime = 0;
-			this.#cachedDuration = 0;
+			if (isCleanData) {
+				this.#startTime = 0;
+				this.#cachedDuration = 0;
+				this.metadata = undefined;
+			}
 		}
 	}
 	pause() {
-		if (!this.command) throw new Error('Not playing');
+		if (!this.command)
+			throw new DiscordStreamClientError('PLAYER_NOT_PLAYING');
 		util.pause(this.command);
 		this.voiceUdp?.voiceConnection.manager.pauseScreenShare(true);
 		this.#isPaused = true;
@@ -271,7 +350,8 @@ class Player extends EventEmitter {
 		return this;
 	}
 	resume() {
-		if (!this.command) throw new Error('Not playing');
+		if (!this.command)
+			throw new DiscordStreamClientError('PLAYER_NOT_PLAYING');
 		util.resume(this.command);
 		this.voiceUdp?.voiceConnection.manager.pauseScreenShare(false);
 		this.#isPaused = false;

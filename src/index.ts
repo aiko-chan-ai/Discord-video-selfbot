@@ -6,11 +6,14 @@ import Player from './Media/Player';
 import VoiceUDP from './Class/VoiceUDP';
 import {
 	Client,
+	DMChannel,
+	PartialGroupDMChannel,
 	VoiceChannel,
 	VoiceChannelResolvable,
 } from 'discord.js-selfbot-v13';
 import { DiscordStreamClientError, ErrorCodes } from './Util/Error';
 import { ResolutionType } from './Util/Util';
+import { Readable } from 'stream';
 
 declare module 'discord.js-selfbot-v13' {
 	interface Client {
@@ -18,15 +21,29 @@ declare module 'discord.js-selfbot-v13' {
 	}
 }
 
+interface DiscordStreamClientEvents {
+	debug: (
+		type: 'VoiceConnection' | 'VoiceUDP' | string,
+		message: string,
+	) => void;
+	error: (error: Error) => void;
+}
+
 interface DiscordStreamClient {
-	on(event: 'error', listener: (error: Error) => void): this;
-	on(event: 'debug', listener: (type: 'VoiceConnection' | 'VoiceUDP' | string, message: string) => void): this;
+	on<K extends keyof DiscordStreamClientEvents>(
+		event: K,
+		listener: DiscordStreamClientEvents[K],
+	): this;
+	once<K extends keyof DiscordStreamClientEvents>(
+		event: K,
+		listener: DiscordStreamClientEvents[K],
+	): this;
 }
 
 class DiscordStreamClient extends EventEmitter {
 	client!: Client;
 	connection?: VoiceConnection;
-	channel?: VoiceChannel;
+	channel?: VoiceChannel | DMChannel | PartialGroupDMChannel;
 	selfDeaf: boolean;
 	selfMute: boolean;
 	selfVideo: boolean;
@@ -63,7 +80,9 @@ class DiscordStreamClient extends EventEmitter {
 			const StreamKey = data.stream_key.split(':');
 			if (StreamKey[0] == 'guild') {
 				const [type, guildId, channelId, userId] = StreamKey;
-				if (this.streamClient.connection?.guildId != guildId) return;
+				// if (this.streamClient.connection?.guildId != guildId) return;
+				if (this.streamClient.connection?.channelId != channelId)
+					return;
 				if (userId === this.user.id) {
 					(
 						(this.streamClient.connection as VoiceConnection)
@@ -81,7 +100,25 @@ class DiscordStreamClient extends EventEmitter {
 					);
 				}
 			} else if (StreamKey[0] == 'call') {
-				// Todo
+				const [type, channelId, userId] = StreamKey;
+				if (this.streamClient.connection?.channelId != channelId)
+					return;
+				if (userId === this.user.id) {
+					(
+						(this.streamClient.connection as VoiceConnection)
+							.streamConnection as StreamConnection
+					).serverId = data.rtc_server_id;
+					(
+						(this.streamClient.connection as VoiceConnection)
+							.streamConnection as StreamConnection
+					).streamKey = data.stream_key;
+					(
+						(this.streamClient.connection as VoiceConnection)
+							.streamConnection as StreamConnection
+					).setSession(
+						this.streamClient.connection?.sessionId as string,
+					);
+				}
 			}
 		} else if (event === 'STREAM_SERVER_UPDATE') {
 			const StreamKey = data.stream_key.split(':');
@@ -92,6 +129,8 @@ class DiscordStreamClient extends EventEmitter {
 					guildId
 				)
 					return;
+				if (this.streamClient.connection?.channelId != channelId)
+					return;
 				if (userId === this.user.id) {
 					(
 						(this.streamClient.connection as VoiceConnection)
@@ -99,7 +138,15 @@ class DiscordStreamClient extends EventEmitter {
 					).setServer(data);
 				}
 			} else if (StreamKey[0] == 'call') {
-				// Todo
+				const [type, channelId, userId] = StreamKey;
+				if (this.streamClient.connection?.channelId != channelId)
+					return;
+				if (userId === this.user.id) {
+					(
+						(this.streamClient.connection as VoiceConnection)
+							.streamConnection as StreamConnection
+					).setServer(data);
+				}
 			}
 		} else if (event === 'STREAM_DELETE') {
 			const StreamKey = data.stream_key.split(':');
@@ -110,13 +157,22 @@ class DiscordStreamClient extends EventEmitter {
 					guildId
 				)
 					return;
+				if (this.streamClient.connection?.channelId != channelId)
+					return;
 				if (userId === this.user.id) {
 					(
 						this.streamClient.connection as VoiceConnection
 					).disconnect();
 				}
 			} else if (StreamKey[0] == 'call') {
-				// Todo
+				const [type, channelId, userId] = StreamKey;
+				if (this.streamClient.connection?.channelId != channelId)
+					return;
+				if (userId === this.user.id) {
+					(
+						this.streamClient.connection as VoiceConnection
+					).disconnect();
+				}
 			}
 		}
 	}
@@ -138,6 +194,7 @@ class DiscordStreamClient extends EventEmitter {
 		(this.client.ws as any).broadcast({
 			op: GatewayOpCodes.VOICE_STATE_UPDATE,
 			d: {
+				// @ts-ignore
 				guild_id: this.channel?.guildId ?? null,
 				channel_id: this.channel?.id ?? null,
 				self_mute: this.selfMute,
@@ -147,17 +204,22 @@ class DiscordStreamClient extends EventEmitter {
 		});
 	}
 	joinVoiceChannel(
-		channel: VoiceChannel,
+		channel: VoiceChannel | DMChannel | PartialGroupDMChannel,
 		{ selfMute = false, selfDeaf = false, selfVideo = false } = {},
 		timeout = 30_000,
 	): Promise<VoiceConnection> {
-		if (!channel || !channel.isVoice() || !channel.joinable)
+		if (
+			!channel ||
+			(!['DM', 'GROUP_DM'].includes(channel.type) &&
+				(!channel.isVoice() || !channel.joinable))
+		)
 			throw new DiscordStreamClientError('NO_CHANNEL');
 		this.patch();
 		this.channel = channel;
 		this.signalVoiceChannel({ selfMute, selfDeaf, selfVideo });
 		this.connection = new VoiceConnection(
 			this,
+			// @ts-ignore
 			channel.guildId ?? null,
 			channel.id,
 		);
@@ -217,7 +279,7 @@ class DiscordStreamClient extends EventEmitter {
 	signalScreenShare() {
 		if (!this.connection?.streamConnection)
 			throw new DiscordStreamClientError('NO_STREAM_CONNECTION');
-		if (!this.channel || !this.channel.isVoice())
+		if (!this.channel)
 			throw new DiscordStreamClientError('MISSING_VOICE_CHANNEL');
 		let data: {
 			type: 'guild' | 'call';
@@ -231,9 +293,10 @@ class DiscordStreamClient extends EventEmitter {
 			preferred_region: null,
 		};
 		if (['DM', 'GROUP_DM'].includes(this.channel.type)) {
-			throw new DiscordStreamClientError('CHANNEL_TYPE_NOT_SUPPORTED');
 			data.type = 'call';
 		} else {
+			if (!this.channel.isVoice())
+				throw new DiscordStreamClientError('MISSING_VOICE_CHANNEL');
 			data.guild_id = this.channel.guildId;
 		}
 		(this.client.ws as any).broadcast({
@@ -244,13 +307,15 @@ class DiscordStreamClient extends EventEmitter {
 	}
 	pauseScreenShare(isPause = false) {
 		if (!this.connection?.streamConnection) return;
-		if (!this.channel || !this.channel.isVoice())
-			throw new DiscordStreamClientError('MISSING_VOICE_CHANNEL');
-		let streamKey = `guild:${this.channel.guildId}:${this.channel.id}:${this.client.user?.id}`;
-		if (['DM', 'GROUP_DM'].includes(this.channel.type)) {
-			throw new DiscordStreamClientError('CHANNEL_TYPE_NOT_SUPPORTED');
+		let streamKey;
+		if (['DM', 'GROUP_DM'].includes(this.channel?.type as string)) {
 			streamKey = `call:${this.channel?.id}:${this.client.user?.id}`;
+		} else {
+			if (!this.channel || !this.channel.isVoice())
+				throw new DiscordStreamClientError('MISSING_VOICE_CHANNEL');
+			streamKey = `guild:${this.channel.guildId}:${this.channel.id}:${this.client.user?.id}`;
 		}
+
 		(this.client.ws as any).broadcast({
 			// @ts-ignore
 			op: GatewayOpCodes.STREAM_SET_PAUSED,
@@ -262,12 +327,13 @@ class DiscordStreamClient extends EventEmitter {
 	}
 	stopScreenShare() {
 		if (!this.connection?.streamConnection) return;
-		if (!this.channel || !this.channel.isVoice())
-			throw new DiscordStreamClientError('MISSING_VOICE_CHANNEL');
-		let streamKey = `guild:${this.channel.guildId}:${this.channel.id}:${this.client.user?.id}`;
-		if (['DM', 'GROUP_DM'].includes(this.channel.type)) {
-			throw new DiscordStreamClientError('CHANNEL_TYPE_NOT_SUPPORTED');
+		let streamKey;
+		if (['DM', 'GROUP_DM'].includes(this.channel?.type as string)) {
 			streamKey = `call:${this.channel?.id}:${this.client.user?.id}`;
+		} else {
+			if (!this.channel || !this.channel.isVoice())
+				throw new DiscordStreamClientError('MISSING_VOICE_CHANNEL');
+			streamKey = `guild:${this.channel.guildId}:${this.channel.id}:${this.client.user?.id}`;
 		}
 		(this.client.ws as any).broadcast({
 			// @ts-ignore
@@ -278,17 +344,15 @@ class DiscordStreamClient extends EventEmitter {
 		});
 		this.connection.streamConnection = undefined;
 	}
-	createPlayer(path: any, udpConnection: VoiceUDP) {
+	createPlayer(playable: string | Readable, udpConnection: VoiceUDP) {
 		if (!this.connection)
 			throw new DiscordStreamClientError('NO_STREAM_CONNECTION');
-		if (!(udpConnection instanceof VoiceUDP))
-			throw new DiscordStreamClientError('NO_UDP');
-		if (!path || typeof path !== 'string')
-			throw new DiscordStreamClientError('NO_STREAM_PATH');
-		udpConnection.voiceConnection.setSpeaking(true);
-		udpConnection.voiceConnection.setVideoStatus(true);
-		udpConnection.voiceConnection.manager.pauseScreenShare(false);
-		const player = new Player(path, udpConnection);
+		const player = new Player(playable, udpConnection);
+		player.once('spawnProcess', () => {
+			udpConnection.voiceConnection.setSpeaking(true);
+			udpConnection.voiceConnection.setVideoStatus(true);
+			udpConnection.voiceConnection.manager.pauseScreenShare(false);
+		});
 		player.once('finish', () => {
 			udpConnection.voiceConnection.setSpeaking(false);
 			udpConnection.voiceConnection.setVideoStatus(false);

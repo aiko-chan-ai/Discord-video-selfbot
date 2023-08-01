@@ -14,8 +14,6 @@ const ErrorCodes = {
 		'You must provide a client to the DiscordStreamClient constructor',
 	NO_CHANNEL: 'You must provide a channel to joinVoiceChannel',
 	MISSING_VOICE_CHANNEL: 'Missing voice channel',
-	NO_STREAM_PATH: 'You must provide a stream path to createPlayer',
-	NO_UDP: 'You must provide a UDP connection to createPlayer',
 	NO_STREAM_CONNECTION:
 		'You must create a stream connection to use this function',
 	CHANNEL_TYPE_NOT_SUPPORTED:
@@ -25,9 +23,14 @@ const ErrorCodes = {
 	JOIN_VOICE_CHANNEL_FAILED: 'Failed to join voice channel (Timeout)',
 	STREAM_CONNECTION_FAILED: 'Failed to connect to stream server (Timeout)',
 	INVALID_RESOLUTION: 'Invalid resolution (1440p, 1080p, 720p, 480p or auto)',
+	PLAYER_MISSING_PLAYABLE: 'Player is missing playable (string or Readable)',
+	PLAYER_MISSING_VOICE_UDP: 'Player is missing voiceUdp',
+	PLAYER_NOT_PLAYING: 'Player is not playing',
+	STREAM_INVALID: 'Invalid stream (No metadata)',
 };
 
 export {
     DiscordStreamClientError,
     ErrorCodes,
+	ErrorCode,
 }
