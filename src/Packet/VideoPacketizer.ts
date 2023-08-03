@@ -18,7 +18,7 @@ export class VideoPacketizer extends BaseMediaPacketizer {
 
     createPacket(chunk: any, isLastPacket = true, isFirstPacket = true) {
 		if (chunk.length > this.mtu)
-			throw Error(
+			throw new Error(
 				'error packetizing video frame: frame is larger than mtu',
 			);
 		// @ts-ignore

@@ -97,7 +97,6 @@ class VoiceConnection {
 					priority: 1000,
 					payload_type: 120,
 				},
-				/*
 				{
 					name: 'H264',
 					type: 'video',
@@ -105,7 +104,6 @@ class VoiceConnection {
 					payload_type: 101,
 					rtx_payload_type: 102,
 				},
-				*/
 				{
 					name: 'VP8',
 					type: 'video',
@@ -113,7 +111,6 @@ class VoiceConnection {
 					payload_type: 103,
 					rtx_payload_type: 104,
 				},
-				/*
 				{
 					name: 'VP9',
 					type: 'video',
@@ -121,7 +118,6 @@ class VoiceConnection {
 					payload_type: 105,
 					rtx_payload_type: 106,
 				},
-				*/
 			],
 			data: {
 				address: this.selfIp,

@@ -57,6 +57,7 @@ export class BaseMediaPacketizer {
 
 	makeRtpHeader(ssrc: any, isLastPacket = true) {
 		const packetHeader = Buffer.alloc(12);
+		// video: 144 (this._extensionEnabled = true)
 		packetHeader[0] = (2 << 6) | ((this._extensionEnabled ? 1 : 0) << 4); // set version and flags
 		packetHeader[1] = this._payloadType; // set packet payload
 		if (isLastPacket) packetHeader[1] |= 0b10000000; // mark M bit if last frame
