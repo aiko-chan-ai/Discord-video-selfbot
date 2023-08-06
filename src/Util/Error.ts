@@ -27,6 +27,7 @@ const ErrorCodes = {
 	PLAYER_MISSING_VOICE_UDP: 'Player is missing voiceUdp',
 	PLAYER_NOT_PLAYING: 'Player is not playing',
 	STREAM_INVALID: 'Invalid stream (No metadata)',
+	INVALID_SEEK_TIME: 'Invalid seek time (Must be a number)',
 };
 
 export {

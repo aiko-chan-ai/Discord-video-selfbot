@@ -17,6 +17,7 @@ interface PlayOptions {
 	fps?: number;
 	hwaccel?: boolean;
 	volume?: number;
+	seekTime?: number;
 }
 
 interface PlayerEvents {
@@ -55,10 +56,7 @@ interface PlayerEvents {
 }
 
 interface Player {
-	on<U extends keyof PlayerEvents>(
-		event: U,
-		listener: PlayerEvents[U],
-	): this;
+	on<U extends keyof PlayerEvents>(event: U, listener: PlayerEvents[U]): this;
 	once<U extends keyof PlayerEvents>(
 		event: U,
 		listener: PlayerEvents[U],
@@ -108,28 +106,19 @@ class Player extends EventEmitter {
 						(s) => s.codec_type === 'video',
 					),
 				});
-			}
-			const instance = ffmpeg(input).on('error', (err, stdout, stderr) =>
-				reject(err),
-			);
-			instance.ffprobe((err, metadata) => {
-				if (err) reject(err);
-				instance.removeAllListeners();
-				this.metadata = metadata;
-				if (!this.metadata?.streams)
-					return reject(
-						new DiscordStreamClientError('STREAM_INVALID'),
-					);
-				resolve({
-					audio: metadata.streams.some(
-						(s) => s.codec_type === 'audio',
-					),
-					video: metadata.streams.some(
-						(s) => s.codec_type === 'video',
-					),
+			} else {
+				const instance = ffmpeg(input).on(
+					'error',
+					(err, stdout, stderr) => reject(err),
+				);
+				instance.ffprobe((err, metadata) => {
+					if (err) reject(err);
+					instance.removeAllListeners();
+					this.metadata = metadata || {};
+					resolve(this.validateInputMetadata(input));
+					instance.kill('SIGINT');
 				});
-				instance.kill('SIGINT');
-			});
+			}
 		});
 	}
 	play(options: PlayOptions = {}): Promise<boolean> {
@@ -150,7 +139,8 @@ class Player extends EventEmitter {
 					getFrameDelayInMilliseconds(header),
 				);
 				this.emit('vp8Header', header);
-				this.#startTime = Date.now();
+				this.#startTime = Date.now() - (options?.seekTime || 0) * 1000;
+				this.#cachedDuration = 0;
 				this.#isPaused = false;
 			});
 
@@ -310,6 +300,13 @@ class Player extends EventEmitter {
 							),
 						);
 				}
+				if (
+					options?.seekTime &&
+					typeof options?.seekTime === 'number' &&
+					options?.seekTime > 0
+				) {
+					this.command.seekInput(options.seekTime.toString());
+				}
 				this.command.run();
 				this.ivfStream.pipe(this.videoStream, { end: false });
 				this.opusStream?.pipe(this.audioStream as AudioStream, {
@@ -319,7 +316,7 @@ class Player extends EventEmitter {
 				this.command = undefined;
 				reject(e);
 			}
-		})
+		});
 	}
 	stop() {
 		return this.#stop(true);
@@ -356,6 +353,16 @@ class Player extends EventEmitter {
 		this.voiceUdp?.voiceConnection.manager.pauseScreenShare(false);
 		this.#isPaused = false;
 		this.#startTime = Date.now() - this.#cachedDuration;
+		return this;
+	}
+	seek(time: number) {
+		if (typeof time !== 'number' || isNaN(time))
+			throw new DiscordStreamClientError('INVALID_SEEK_TIME');
+		this.#stop(false);
+		this.play({
+			...this.playOptions,
+			seekTime: time,
+		});
 		return this;
 	}
 	get isPlaying() {
