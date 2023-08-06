@@ -28,6 +28,7 @@ const ErrorCodes = {
 	PLAYER_NOT_PLAYING: 'Player is not playing',
 	STREAM_INVALID: 'Invalid stream (No metadata)',
 	INVALID_SEEK_TIME: 'Invalid seek time (Must be a number)',
+	INVALID_VOLUME: 'Invalid volume (Must be a number between 0 and 200)',
 };
 
 export {

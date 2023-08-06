@@ -336,6 +336,12 @@ class Player extends EventEmitter {
 				this.metadata = undefined;
 			}
 		}
+		return new Promise((resolve) => {
+			setTimeout(() => {
+				resolve(true);
+			}, 500);
+			// Make sure ffmpeg is killed
+		});
 	}
 	pause() {
 		if (!this.command)
@@ -358,11 +364,19 @@ class Player extends EventEmitter {
 	seek(time: number) {
 		if (typeof time !== 'number' || isNaN(time))
 			throw new DiscordStreamClientError('INVALID_SEEK_TIME');
-		this.#stop(false);
-		this.play({
-			...this.playOptions,
-			seekTime: time,
-		});
+		this.#stop(false).then(() =>
+			this.play({
+				...this.playOptions,
+				seekTime: time,
+			}),
+		);
+		return this;
+	}
+	setVolume(volume: number) {
+		if (typeof volume !== 'number' || isNaN(volume) || volume < 0)
+			throw new DiscordStreamClientError('INVALID_VOLUME');
+		(this.playOptions as PlayOptions).volume = volume;
+		this.seek(this.currentTime);
 		return this;
 	}
 	get isPlaying() {
