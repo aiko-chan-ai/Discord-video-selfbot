@@ -17,7 +17,8 @@ interface PlayOptions {
 	fps?: number;
 	hwaccel?: boolean;
 	volume?: number;
-	seekTime?: number;
+	// @ts-ignore
+	private seekTime?: number;
 }
 
 interface PlayerEvents {
@@ -138,7 +139,7 @@ class Player extends EventEmitter {
 				(this.videoStream as VideoStream).setSleepTime(
 					getFrameDelayInMilliseconds(header),
 				);
-				this.emit('vp8Header', header);
+				if (!options?.seekTime) this.emit('vp8Header', header);
 				this.#startTime = Date.now() - (options?.seekTime || 0) * 1000;
 				this.#cachedDuration = 0;
 				this.#isPaused = false;
