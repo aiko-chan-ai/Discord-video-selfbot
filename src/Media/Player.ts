@@ -4,7 +4,7 @@ import { getFrameDelayInMilliseconds, IvfTransformer } from './ivfreader';
 import prism from 'prism-media';
 import { VideoStream } from './videoStream';
 import { AudioStream } from './audioStream';
-import { StreamOutput } from '@dank074/fluent-ffmpeg-multistream-ts';
+import { StreamOutput } from '@aikochan2k6/fluent-ffmpeg-multistream-ts';
 import { formatDuration, getResolutionData } from '../Util/Util';
 import EventEmitter from 'events';
 import VoiceUDP from '../Class/VoiceUDP';
@@ -78,7 +78,14 @@ class Player extends EventEmitter {
 	#startTime: number = 0;
 	#cachedDuration: number = 0;
 	playOptions?: PlayOptions;
-	constructor(playable: string | Readable, voiceUdp: VoiceUDP) {
+	ffmpegPath?: {
+		ffmpeg: string;
+		ffprobe: string;
+	};
+	constructor(playable: string | Readable, voiceUdp: VoiceUDP, ffmpegPath?: {
+		ffmpeg: string;
+		ffprobe: string;
+	}) {
 		super();
 		if (typeof playable !== 'string' && !playable.readable) {
 			throw new DiscordStreamClientError('PLAYER_MISSING_PLAYABLE');
@@ -88,6 +95,29 @@ class Player extends EventEmitter {
 		}
 		this.playable = playable;
 		this.voiceUdp = voiceUdp;
+		if (ffmpegPath) {
+			this.ffmpegPath = ffmpegPath;
+			ffmpeg.setFfmpegPath(ffmpegPath.ffmpeg);
+			ffmpeg.setFfprobePath(ffmpegPath.ffprobe);
+		}
+		this.checkFFmpegAndFFprobeExists();
+	}
+	checkFFmpegAndFFprobeExists() {
+		return new Promise((resolve, reject) => {
+			ffmpeg.getAvailableEncoders((err, encoders) => {
+				if (err) reject(err);
+				if (!encoders?.length) {
+					reject(new DiscordStreamClientError('FFMPEG_NOT_FOUND'));
+				}
+				ffmpeg.getAvailableFormats((err, formats) => {
+					if (err) reject(err);
+					if (!formats?.length) {
+						reject(new DiscordStreamClientError('FFPROBE_NOT_FOUND'));
+					}
+					resolve(true);
+				});
+			});
+		});
 	}
 	validateInputMetadata(input: any): Promise<{
 		audio: boolean;
