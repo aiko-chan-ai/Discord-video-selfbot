@@ -344,10 +344,17 @@ class DiscordStreamClient extends EventEmitter {
 		});
 		this.connection.streamConnection = undefined;
 	}
-	createPlayer(playable: string | Readable, udpConnection: VoiceUDP) {
+	createPlayer(
+		playable: string | Readable,
+		udpConnection: VoiceUDP,
+		ffmpegPath?: {
+			ffmpeg: string;
+			ffprobe: string;
+		},
+	) {
 		if (!this.connection)
 			throw new DiscordStreamClientError('NO_STREAM_CONNECTION');
-		const player = new Player(playable, udpConnection);
+		const player = new Player(playable, udpConnection, ffmpegPath);
 		player.once('spawnProcess', () => {
 			udpConnection.voiceConnection.setSpeaking(true);
 			udpConnection.voiceConnection.setVideoStatus(true);
