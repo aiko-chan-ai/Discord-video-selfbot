@@ -118,6 +118,17 @@ class Player extends EventEmitter {
 		video: boolean;
 	}> {
 		return new Promise((resolve, reject) => {
+			if (input instanceof Readable) {
+				this.metadata = {
+					streams: [],
+					chapters: [],
+					format: {},
+				};
+				return resolve({
+					audio: true,
+					video: true,
+				});
+			}
 			if (this.metadata) {
 				if (!this.metadata?.streams)
 					return reject(
@@ -389,6 +400,9 @@ class Player extends EventEmitter {
 	seek(time: number) {
 		if (typeof time !== 'number' || isNaN(time))
 			throw new DiscordStreamClientError('INVALID_SEEK_TIME');
+		if (this.duration < time) {
+			throw new DiscordStreamClientError('INVALID_SEEK_TIME');
+		}
 		this.#stop(false).then(() =>
 			this.play({
 				...this.playOptions,
@@ -411,7 +425,7 @@ class Player extends EventEmitter {
 		return this.#isPaused;
 	}
 	get duration() {
-		return this.metadata?.format.duration || 0;
+		return this.metadata?.format?.duration || 0;
 	}
 	get formattedDuration() {
 		return formatDuration(this.duration);
