@@ -106,14 +106,8 @@ class Player extends EventEmitter {
 		return new Promise((resolve, reject) => {
 			ffmpeg.getAvailableEncoders((err, encoders) => {
 				if (err) reject(err);
-				if (!encoders?.length) {
-					reject(new DiscordStreamClientError('FFMPEG_NOT_FOUND'));
-				}
 				ffmpeg.getAvailableFormats((err, formats) => {
 					if (err) reject(err);
-					if (!formats?.length) {
-						reject(new DiscordStreamClientError('FFPROBE_NOT_FOUND'));
-					}
 					resolve(true);
 				});
 			});

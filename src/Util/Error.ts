@@ -29,8 +29,6 @@ const ErrorCodes = {
 	STREAM_INVALID: 'Invalid stream (No metadata)',
 	INVALID_SEEK_TIME: 'Invalid seek time (Must be a number)',
 	INVALID_VOLUME: 'Invalid volume (Must be a number between 0 and 200)',
-	FFMPEG_NOT_FOUND: 'FFMPEG not found',
-	FFPROBE_NOT_FOUND: 'FFPROBE not found',
 };
 
 export {
