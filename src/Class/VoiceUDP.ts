@@ -31,7 +31,7 @@ class VoiceUDP {
 		this.nonce = 0;
 		this.ready = false;
 		this.audioPacketizer = new AudioPacketizer(this);
-		this.videoPacketizer = new VideoPacketizer(this);
+		this.videoPacketizer = new VideoPacketizer(this, this.voiceConnection.manager.videoCodec);
 	}
 
 	connect() {
@@ -110,18 +110,7 @@ class VoiceUDP {
 	 * @param frame
 	 */
 	sendVideoFrame(frame: any) {
-		if (!this.ready) return;
-		const data = this.videoPacketizer.partitionVideoData(frame);
-		for (let i = 0; i < data.length; i++) {
-			const packet = this.videoPacketizer.createPacket(
-				data[i],
-				i === data.length - 1,
-				i === 0,
-			);
-			this.sendPacket(packet);
-		}
-
-		this.videoPacketizer.onFrameSent();
+		this.videoPacketizer.sendFrame(frame);
 	}
 
 	stop() {

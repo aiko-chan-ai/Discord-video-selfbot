@@ -1,17 +1,23 @@
 import { crypto_secretbox_easy } from 'libsodium-wrappers';
+import VoiceUDP from '../Class/VoiceUDP';
 
 export const max_int16bit = 2 ** 16 - 1;
 export const max_int32bit = 2 ** 32 - 1;
 
 export class BaseMediaPacketizer {
-    private _payloadType: number;
-    private _mtu: number;
-    private _sequence: number;
-    private _timestamp: number;
-    private _connection: any;
-    private _extensionEnabled: boolean;
-	constructor(connection: any, payloadType: number, extensionEnabled = false) {
-		Object.defineProperty(this, 'connection', { value: connection });
+	private _payloadType: number;
+	private _mtu: number;
+	private _sequence: number;
+	private _timestamp: number;
+	private _connection: VoiceUDP;
+	private _extensionEnabled: boolean;
+
+	constructor(
+		connection: VoiceUDP,
+		payloadType: number,
+		extensionEnabled = false,
+	) {
+		this._connection = connection;
 		this._payloadType = payloadType;
 		this._sequence = 0;
 		this._timestamp = 0;
@@ -19,16 +25,20 @@ export class BaseMediaPacketizer {
 		this._extensionEnabled = extensionEnabled;
 	}
 
-	createPacket(chunk: any, isLastPacket = true, isFirstPacket = true) {
-		// override this
-		return Buffer.alloc(1);
-	}
-
-	onFrameSent() {
+	public sendFrame(frame: any): void {
 		// override this
 	}
 
-	partitionVideoData(data: any) {
+	public onFrameSent(): void {
+		// override this
+	}
+
+	/**
+	 * Partitions a buffer into chunks of length this.mtu
+	 * @param data buffer to be partitioned
+	 * @returns array of chunks
+	 */
+	public partitionDataMTUSizedChunks(data: any): any[] {
 		let i = 0;
 		let len = data.length;
 
@@ -44,23 +54,24 @@ export class BaseMediaPacketizer {
 		return out;
 	}
 
-	getNewSequence() {
+	public getNewSequence(): number {
 		this._sequence++;
 		if (this._sequence > max_int16bit) this._sequence = 0;
 		return this._sequence;
 	}
 
-	incrementTimestamp(incrementBy: any) {
+	public incrementTimestamp(incrementBy: number): void {
 		this._timestamp += incrementBy;
 		if (this._timestamp > max_int32bit) this._timestamp = 0;
 	}
 
-	makeRtpHeader(ssrc: any, isLastPacket = true) {
+	public makeRtpHeader(ssrc: number, isLastPacket: boolean = true): Buffer {
 		const packetHeader = Buffer.alloc(12);
-		// video: 144 (this._extensionEnabled = true)
+
 		packetHeader[0] = (2 << 6) | ((this._extensionEnabled ? 1 : 0) << 4); // set version and flags
 		packetHeader[1] = this._payloadType; // set packet payload
 		if (isLastPacket) packetHeader[1] |= 0b10000000; // mark M bit if last frame
+
 		packetHeader.writeUIntBE(this.getNewSequence(), 2, 2);
 		packetHeader.writeUIntBE(this._timestamp, 4, 4);
 		packetHeader.writeUIntBE(ssrc, 8, 4);
@@ -73,7 +84,7 @@ export class BaseMediaPacketizer {
 	 * @see https://webrtc.googlesource.com/src/+/refs/heads/main/docs/native-code/rtp-hdrext/playout-delay
 	 * @returns playout-delay extension @type Buffer
 	 */
-	createHeaderExtension() {
+	public createHeaderExtension(): Buffer {
 		const extensions = [{ id: 5, len: 2, val: 0 }];
 
 		/**
@@ -121,16 +132,22 @@ export class BaseMediaPacketizer {
 
 	// encrypts all data that is not in rtp header.
 	// rtp header extensions and payload headers are also encrypted
-	encryptData(message: any, nonceBuffer: any) {
+	public encryptData(
+		message: string | Uint8Array,
+		nonceBuffer: Buffer,
+	): Uint8Array {
 		return crypto_secretbox_easy(
 			message,
 			nonceBuffer,
-			// @ts-ignore
-			this.connection.voiceConnection.secretkey,
+			this._connection.voiceConnection.secretkey as Uint8Array,
 		);
 	}
 
-	get mtu() {
+	public get connection(): VoiceUDP {
+		return this._connection;
+	}
+
+	public get mtu(): number {
 		return this._mtu;
 	}
 }

@@ -29,6 +29,7 @@ const ErrorCodes = {
 	STREAM_INVALID: 'Invalid stream (No metadata)',
 	INVALID_SEEK_TIME: 'Invalid seek time (Must be a number)',
 	INVALID_VOLUME: 'Invalid volume (Must be a number between 0 and 200)',
+	INVALID_CODEC: 'Invalid codec (VP8 or H264)',
 };
 
 export {

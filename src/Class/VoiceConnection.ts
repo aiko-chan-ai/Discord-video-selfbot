@@ -6,6 +6,7 @@ import VoiceUDP from './VoiceUDP';
 import { DiscordStreamClientError } from '../Util/Error';
 import { Snowflake } from 'discord.js-selfbot-v13';
 import { getResolutionData } from '../Util/Util';
+import { VideoCodecProtocols } from '../Util/Constants';
 
 class VoiceConnection {
 	serverId!: Snowflake;
@@ -88,6 +89,7 @@ class VoiceConnection {
 		}, interval).unref();
 	}
 	selectProtocols() {
+		const videoCodecSelected = VideoCodecProtocols[this.manager.videoCodec];
 		this.sendOpcode(VoiceOpCodes.SELECT_PROTOCOL, {
 			protocol: 'udp',
 			codecs: [
@@ -97,27 +99,7 @@ class VoiceConnection {
 					priority: 1000,
 					payload_type: 120,
 				},
-				{
-					name: 'H264',
-					type: 'video',
-					priority: 1000,
-					payload_type: 101,
-					rtx_payload_type: 102,
-				},
-				{
-					name: 'VP8',
-					type: 'video',
-					priority: 3000,
-					payload_type: 103,
-					rtx_payload_type: 104,
-				},
-				{
-					name: 'VP9',
-					type: 'video',
-					priority: 3000,
-					payload_type: 105,
-					rtx_payload_type: 106,
-				},
+				videoCodecSelected,
 			],
 			data: {
 				address: this.selfIp,

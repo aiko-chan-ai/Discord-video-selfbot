@@ -1,6 +1,7 @@
 import ffmpeg from 'fluent-ffmpeg';
 import * as util from 'fluent-ffmpeg-util';
-import { getFrameDelayInMilliseconds, IvfTransformer } from './ivfreader';
+import { getFrameDelayInMilliseconds, IvfTransformer } from './Util/ivfreader';
+import { H264NalSplitter } from './Util/H264NalSplitter';
 import prism from 'prism-media';
 import { VideoStream } from './videoStream';
 import { AudioStream } from './audioStream';
@@ -18,38 +19,12 @@ interface PlayOptions {
 	hwaccel?: boolean;
 	volume?: number;
 	// @ts-ignore
-	private seekTime?: number;
+	seekTime?: number;
 }
 
 interface PlayerEvents {
 	spawnProcess: (commandLine: string) => void;
-	codecData: (data: {
-		format: any;
-		duration: any;
-		audio: any;
-		video: any;
-		audio_details: any;
-		video_details: any;
-	}) => void;
-	progress: (progress: {
-		frames: any;
-		currentFps: any;
-		currentKbps: any;
-		targetSize: any;
-		timemark: any;
-		percent: any;
-	}) => void;
-	vp8Header: (header: {
-		signature: string;
-		version: number;
-		headerLength: number;
-		codec: string;
-		width: number;
-		height: number;
-		timeDenominator: number;
-		timeNumerator: number;
-		frameCount: number;
-	}) => void;
+	start: () => void;
 	finish: () => void;
 	finishVideo: () => void;
 	finishAudio: () => void;
@@ -70,10 +45,11 @@ class Player extends EventEmitter {
 	command?: ffmpeg.FfmpegCommand;
 	videoStream!: VideoStream;
 	audioStream?: AudioStream;
-	ivfStream!: IvfTransformer;
+	videoOutput!: IvfTransformer | H264NalSplitter;
 	opusStream?: prism.opus.Encoder;
 	fps: number = 60;
 	#isPaused: boolean = false;
+	#isStarted: boolean = false;
 	metadata?: ffmpeg.FfprobeData;
 	#startTime: number = 0;
 	#cachedDuration: number = 0;
@@ -82,10 +58,14 @@ class Player extends EventEmitter {
 		ffmpeg: string;
 		ffprobe: string;
 	};
-	constructor(playable: string | Readable, voiceUdp: VoiceUDP, ffmpegPath?: {
-		ffmpeg: string;
-		ffprobe: string;
-	}) {
+	constructor(
+		playable: string | Readable,
+		voiceUdp: VoiceUDP,
+		ffmpegPath?: {
+			ffmpeg: string;
+			ffprobe: string;
+		},
+	) {
 		super();
 		if (typeof playable !== 'string' && !playable.readable) {
 			throw new DiscordStreamClientError('PLAYER_MISSING_PLAYABLE');
@@ -168,13 +148,24 @@ class Player extends EventEmitter {
 				this.voiceUdp as VoiceUDP,
 				this.fps,
 			);
-			this.ivfStream = new IvfTransformer();
-			// get header frame time
-			this.ivfStream.on('header', (header: any) => {
+			if (this.voiceUdp.voiceConnection.manager.videoCodec == 'H264') {
+				this.videoOutput = new H264NalSplitter();
+			} else if (
+				this.voiceUdp.voiceConnection.manager.videoCodec == 'VP8'
+			) {
+				this.videoOutput = new IvfTransformer();
+			}
+			// get header frame time (VP8)
+			this.videoOutput.on('header', (header: any) => {
 				(this.videoStream as VideoStream).setSleepTime(
 					getFrameDelayInMilliseconds(header),
 				);
-				if (!options?.seekTime) this.emit('vp8Header', header);
+			});
+
+			this.videoOutput.on('data', (data: any) => {
+				if (this.isStarted) return;
+				this.#isStarted = true;
+				if (!options?.seekTime) this.emit('start');
 				this.#startTime = Date.now() - (options?.seekTime || 0) * 1000;
 				this.#cachedDuration = 0;
 				this.#isPaused = false;
@@ -228,13 +219,7 @@ class Player extends EventEmitter {
 					.on('start', (commandLine) => {
 						this.emit('spawnProcess', commandLine);
 					})
-					.on('codecData', (data) => {
-						this.emit('codecData', data);
-					})
-					.on('progress', (progress) => {
-						this.emit('progress', progress);
-					})
-					.output(StreamOutput(this.ivfStream).url, {
+					.output(StreamOutput(this.videoOutput).url, {
 						end: false,
 					})
 					.noAudio();
@@ -272,16 +257,32 @@ class Player extends EventEmitter {
 						`${Number(bitrate.toFixed(1)) * 1000}k`,
 					);
 				}
+				let fps = 60;
 				if (
 					options?.fps &&
 					typeof options?.fps === 'number' &&
 					options?.fps > 0
 				) {
 					this.command.fpsOutput(options?.fps);
+					fps = options?.fps;
 				}
-				this.command
-					.format('ivf')
-					.outputOption('-deadline', 'realtime');
+				if (
+					this.voiceUdp.voiceConnection.manager.videoCodec == 'H264'
+				) {
+					this.command
+						.format('h264')
+						.outputOption(
+							`-tune zerolatency -pix_fmt yuv420p -profile:v baseline -g ${fps} -x264-params keyint=${fps}:min-keyint=${fps} -bsf:v h264_metadata=aud=insert`.split(
+								' ',
+							),
+						);
+				} else if (
+					this.voiceUdp.voiceConnection.manager.videoCodec == 'VP8'
+				) {
+					this.command
+						.format('ivf')
+						.outputOption('-deadline', 'realtime');
+				}
 				if (checkData.audio) {
 					this.audioStream = new AudioStream(
 						this.voiceUdp as VoiceUDP,
@@ -344,7 +345,7 @@ class Player extends EventEmitter {
 					this.command.seekInput(options.seekTime.toString());
 				}
 				this.command.run();
-				this.ivfStream.pipe(this.videoStream, { end: false });
+				this.videoOutput.pipe(this.videoStream, { end: false });
 				this.opusStream?.pipe(this.audioStream as AudioStream, {
 					end: false,
 				});
@@ -359,13 +360,14 @@ class Player extends EventEmitter {
 	}
 	#stop(isCleanData: boolean = true) {
 		if (this.command) {
-			this.ivfStream.destroy();
+			this.videoOutput.destroy();
 			this.opusStream?.destroy();
 			this.audioStream?.destroy();
 			this.videoStream.destroy();
 			this.command.kill('SIGINT');
 			this.command = undefined;
 			this.#isPaused = true;
+			this.#isStarted = false;
 			if (isCleanData) {
 				this.#startTime = 0;
 				this.#cachedDuration = 0;
@@ -423,6 +425,9 @@ class Player extends EventEmitter {
 	}
 	get isPaused() {
 		return this.#isPaused;
+	}
+	get isStarted() {
+		return this.#isStarted;
 	}
 	get duration() {
 		return this.metadata?.format?.duration || 0;

@@ -1,6 +1,6 @@
 ## Discord selfbot video
 
-Fork: [Discord-video-stream](https://github.com/dank074/Discord-video-stream)
+Fork: [Discord-video-stream](https://github.com/dank074/Discord-video-stream) <3
 
 ## Features
 
@@ -15,7 +15,7 @@ What I implemented and what I did not.
 
 -   [x] VP8
 -   [ ] VP9
--   [ ] H.264
+-   [x] H.264
 
 #### Packet types
 
@@ -30,7 +30,7 @@ What I implemented and what I did not.
 #### Extras
 
 -   [x] Figure out rtp header extensions (discord specific)
-> [discord seems to use one-byte RTP header extension](https://www.rfc-editor.org/rfc/rfc8285.html#section-4.2)
+    > [discord seems to use one-byte RTP header extension](https://www.rfc-editor.org/rfc/rfc8285.html#section-4.2)
 
 ## Requirements
 
@@ -59,6 +59,7 @@ const client = new Client();
 const StreamClient = new DiscordStreamClient(client);
 
 StreamClient.setResolution('720p');
+// StreamClient.setVideoCodec('VP8'); // H264 is default
 
 const token = 'token';
 
@@ -85,6 +86,9 @@ const player = StreamClient.createPlayer(
 	streamConnection.udp, // UDP connection
 );
 // Events
+player.on('start', () => {
+	console.log('Started playing');
+});
 player.on('finish', () => {
 	console.log('Finished playing');
 });

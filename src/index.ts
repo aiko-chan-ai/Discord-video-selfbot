@@ -13,6 +13,7 @@ import {
 } from 'discord.js-selfbot-v13';
 import { DiscordStreamClientError, ErrorCodes } from './Util/Error';
 import { ResolutionType } from './Util/Util';
+import { VideoCodec } from './Util/Constants';
 import { Readable } from 'stream';
 
 declare module 'discord.js-selfbot-v13' {
@@ -27,6 +28,12 @@ interface DiscordStreamClientEvents {
 		message: string,
 	) => void;
 	error: (error: Error) => void;
+}
+
+interface DiscordStreamClientVoiceState {
+	selfDeaf: boolean;
+	selfMute: boolean;
+	selfVideo: boolean;
 }
 
 interface DiscordStreamClient {
@@ -44,11 +51,14 @@ class DiscordStreamClient extends EventEmitter {
 	client!: Client;
 	connection?: VoiceConnection;
 	channel?: VoiceChannel | DMChannel | PartialGroupDMChannel;
-	selfDeaf: boolean;
-	selfMute: boolean;
-	selfVideo: boolean;
+	voiceState: DiscordStreamClientVoiceState = {
+		selfDeaf: false,
+		selfMute: false,
+		selfVideo: false,
+	};
 	player?: Player;
 	resolution: ResolutionType = '1080p';
+	videoCodec: VideoCodec = 'H264';
 	constructor(client: Client) {
 		super();
 		if (!client || !(client instanceof Client))
@@ -56,18 +66,21 @@ class DiscordStreamClient extends EventEmitter {
 		Object.defineProperty(this, 'client', { value: client });
 		// Inject stream client
 		client.streamClient = this;
-		this.selfDeaf = false;
-		this.selfMute = false;
-		this.selfVideo = false;
 	}
 	patch() {
 		this.unpatch();
-		this.client.on('raw', this._handleEvents);
+		this.client.on('raw', DiscordStreamClient._handleEvents);
+	}
+	sendPacket(packet: {
+		op: number;
+		d: any;
+	}) {
+		(this.client.ws as any).broadcast(packet);
 	}
 	unpatch() {
-		this.client.removeListener('raw', this._handleEvents);
+		this.client.removeListener('raw', DiscordStreamClient._handleEvents);
 	}
-	_handleEvents(this: Client<true>, packet: { t: string; d: any }) {
+	static _handleEvents(this: Client<true>, packet: { t: string; d: any }) {
 		if (typeof packet !== 'object' || !packet.t || !packet.d) return;
 		const { t: event, d: data } = packet;
 		if (event === 'VOICE_STATE_UPDATE') {
@@ -80,7 +93,6 @@ class DiscordStreamClient extends EventEmitter {
 			const StreamKey = data.stream_key.split(':');
 			if (StreamKey[0] == 'guild') {
 				const [type, guildId, channelId, userId] = StreamKey;
-				// if (this.streamClient.connection?.guildId != guildId) return;
 				if (this.streamClient.connection?.channelId != channelId)
 					return;
 				if (userId === this.user.id) {
@@ -181,6 +193,11 @@ class DiscordStreamClient extends EventEmitter {
 			throw new DiscordStreamClientError('INVALID_RESOLUTION');
 		this.resolution = resolution;
 	}
+	setVideoCodec(codec: VideoCodec) {
+		if (!['VP8', 'H264'].includes(codec))
+			throw new DiscordStreamClientError('INVALID_CODEC');
+		this.videoCodec = codec;
+	}
 	signalVoiceChannel(
 		{ selfDeaf, selfMute, selfVideo } = {} as {
 			selfDeaf?: boolean;
@@ -188,18 +205,20 @@ class DiscordStreamClient extends EventEmitter {
 			selfVideo?: boolean;
 		},
 	) {
-		this.selfDeaf = selfDeaf ?? this.selfDeaf;
-		this.selfMute = selfMute ?? this.selfMute;
-		this.selfVideo = selfVideo ?? this.selfVideo;
-		(this.client.ws as any).broadcast({
+		this.voiceState = {
+			selfDeaf: selfDeaf ?? this.voiceState.selfDeaf,
+			selfMute: selfMute ?? this.voiceState.selfMute,
+			selfVideo: selfVideo ?? this.voiceState.selfVideo,
+		};
+		this.sendPacket({
 			op: GatewayOpCodes.VOICE_STATE_UPDATE,
 			d: {
 				// @ts-ignore
 				guild_id: this.channel?.guildId ?? null,
 				channel_id: this.channel?.id ?? null,
-				self_mute: this.selfMute,
-				self_deaf: this.selfDeaf,
-				self_video: this.selfVideo,
+				self_mute: this.voiceState.selfMute,
+				self_deaf: this.voiceState.selfDeaf,
+				self_video: this.voiceState.selfVideo,
 			},
 		});
 	}
