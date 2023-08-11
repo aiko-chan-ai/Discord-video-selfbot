@@ -25,19 +25,22 @@ export class H264NalSplitter extends Transform {
 	 * @param data
 	 * @returns frame with emulation prevention bytes removed
 	 */
-	rbsp(data: any): Buffer {
+	rbsp(data: Buffer): Buffer {
 		const len = data.byteLength;
 		let pos = 0;
 		let epbs = [];
 
-		while (pos < len - 2) {
+		while (pos < len - 3) {
 			if (
 				data[pos] === 0 &&
 				data[pos + 1] === 0 &&
 				data[pos + 2] === 0x03
 			) {
-				epbs.push(pos + 2);
-				pos += 2;
+				const third = data[pos + 3];
+				if (epbSuffix.some((val) => val === third)) {
+					epbs.push(pos + 2);
+					pos += 3;
+				}
 			} else {
 				pos++;
 			}
@@ -104,10 +107,10 @@ export class H264NalSplitter extends Transform {
 	 * Returns true if nal magic string with specified length was found.
 	 * Nal magic string is either 001 or 0001 depending on length
 	 * @param buf
-	 * @param magicLength
-	 * @returns
+	 * @param magicLength either 3 or 4
+	 * @returns true if nalu magic string was found
 	 */
-	findNalByMagicString(buf: Buffer, magicLength: number) {
+	findNalByMagicString(buf: Buffer, magicLength: 3 | 4) {
 		let found = false;
 
 		if (magicLength === 3) {
@@ -173,9 +176,16 @@ export class H264NalSplitter extends Transform {
 						this._accessUnit = [];
 					}
 				} else {
-					// remove emulation bytes from frame
-					const rbspFrame = this.rbsp(frame);
-					this._accessUnit.push(rbspFrame);
+					// remove emulation bytes from frame (only importannt ones like SPS and SEI since its costly operation)
+					if (
+						unitType === NalUnitTypes.SPS ||
+						unitType === NalUnitTypes.SEI
+					) {
+						const rbspFrame = this.rbsp(frame);
+						this._accessUnit.push(rbspFrame);
+					} else {
+						this._accessUnit.push(frame);
+					}
 				}
 			}
 		}

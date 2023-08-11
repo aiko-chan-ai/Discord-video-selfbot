@@ -257,14 +257,13 @@ class Player extends EventEmitter {
 						`${Number(bitrate.toFixed(1)) * 1000}k`,
 					);
 				}
-				let fps = 60;
 				if (
 					options?.fps &&
 					typeof options?.fps === 'number' &&
 					options?.fps > 0
 				) {
 					this.command.fpsOutput(options?.fps);
-					fps = options?.fps;
+					this.voiceUdp.videoPacketizer.fps = options?.fps;
 				}
 				if (
 					this.voiceUdp.voiceConnection.manager.videoCodec == 'H264'
@@ -272,7 +271,7 @@ class Player extends EventEmitter {
 					this.command
 						.format('h264')
 						.outputOption(
-							`-tune zerolatency -pix_fmt yuv420p -profile:v baseline -g ${fps} -x264-params keyint=${fps}:min-keyint=${fps} -bsf:v h264_metadata=aud=insert`.split(
+							`-tune zerolatency -pix_fmt yuv420p -profile:v baseline -g ${this.voiceUdp.videoPacketizer.fps} -x264-params keyint=${this.voiceUdp.videoPacketizer.fps}:min-keyint=${this.voiceUdp.videoPacketizer.fps} -bsf:v h264_metadata=aud=insert`.split(
 								' ',
 							),
 						);

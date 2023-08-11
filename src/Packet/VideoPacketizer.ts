@@ -7,9 +7,11 @@ import { VideoCodec, VideoCodecType } from '../Util/Constants';
 export class VideoPacketizer extends BaseMediaPacketizer {
 	public videoCodec: VideoCodec;
 	private _pictureId: number = 0; // VP8
-	constructor(connection: VoiceUDP, videoCodec: VideoCodec) {
+	public fps: number = 60;
+	constructor(connection: VoiceUDP, videoCodec: VideoCodec, fps = 60) {
 		super(connection, VideoCodecType[videoCodec], true);
 		this.videoCodec = videoCodec;
+		this.fps = fps;
 	}
 
 	public sendFrame(frame: any): void {
@@ -236,7 +238,7 @@ export class VideoPacketizer extends BaseMediaPacketizer {
 	}
 
 	public override onFrameSent(): void {
-		this.incrementTimestamp(90000 / 400);
+		this.incrementTimestamp(90000 / this.fps);
 		if (this.videoCodec == 'VP8') {
 			this.incrementPictureId();
 		}

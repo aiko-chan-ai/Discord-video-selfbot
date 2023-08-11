@@ -4,7 +4,7 @@ Fork: [Discord-video-stream](https://github.com/dank074/Discord-video-stream) <3
 
 ## Features
 
--   Playing vp8 video in a voice channel (`go live`, or webcam video)
+-   Playing vp8 / h264 video in a voice channel (`go live`, or webcam video)
 -   Transcoding video to vp8 and audio to opus (using ffmpeg)
 
 ## Implementation
