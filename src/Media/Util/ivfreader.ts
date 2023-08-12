@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { Transform } from 'stream';
+import { Transform, TransformCallback } from 'stream';
 
 type IvfHeader = {
 	signature: string;
@@ -77,10 +77,10 @@ class IvfTransformer extends Transform {
 		else this.buf = undefined;
 	}
 
-	_write(
+	_transform(
 		chunk: any,
 		encoding: BufferEncoding,
-		cb: (error?: Error | null) => void,
+		callback: TransformCallback,
 	) {
 		this._appendChunkToBuf(chunk);
 
@@ -92,7 +92,7 @@ class IvfTransformer extends Transform {
 				);
 				this._updateBufLen(this.headerSize);
 			} else {
-				cb();
+				callback();
 				return;
 			}
 		}
@@ -108,7 +108,7 @@ class IvfTransformer extends Transform {
 		}
 
 		// callback
-		cb();
+		callback();
 	}
 }
 
