@@ -56,6 +56,7 @@ class VoiceUDP {
 				}
 				this.socket?.on('message', this.handleIncoming);
 			});
+
 			this.sendBlankPacket();
 			resolve(true);
 		});
