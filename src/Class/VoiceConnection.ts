@@ -22,7 +22,7 @@ class VoiceConnection {
 	port?: number;
 	modes?: string[];
 	udp?: VoiceUDP;
-	heartbeatInterval?: NodeJS.Timeout;
+	heartbeatInterval?: NodeJS.Timer;
 	selfIp?: string;
 	selfPort?: number;
 	secretkey?: Uint8Array;
@@ -39,24 +39,30 @@ class VoiceConnection {
 		this.voiceVersion = 7;
 		this.udp = new VoiceUDP(this);
 	}
+
 	get videoSsrc() {
 		return this.ssrc ? this.ssrc + 1 : 0;
 	}
+
 	get rtxSsrc() {
 		return this.ssrc ? this.ssrc + 2 : 0;
 	}
+
 	get wsEndpoint() {
 		return `wss://${this._endpoint}/?v=${this.voiceVersion}`;
 	}
+
 	get isReady() {
 		return (
 			this.ws && this.ws.readyState === WebSocket.OPEN && this.udp?.ready
 		);
 	}
+
 	setSession(sessionId: string) {
 		this.sessionId = sessionId;
 		return this;
 	}
+
 	setServer(
 		{ token, endpoint } = {} as {
 			token?: string;
@@ -67,6 +73,7 @@ class VoiceConnection {
 		this._endpoint = endpoint;
 		return this;
 	}
+
 	handleReady(d: {
 		ssrc: number;
 		ip: string;
@@ -79,15 +86,17 @@ class VoiceConnection {
 		this.modes = d.modes;
 		return this;
 	}
+
 	setupHeartbeat(interval: number) {
 		if (this.heartbeatInterval) {
 			clearInterval(this.heartbeatInterval);
 			this.heartbeatInterval = undefined;
 		}
 		this.heartbeatInterval = setInterval(() => {
-			this.sendOpcode(VoiceOpCodes.HEARTBEAT, interval);
+			this.sendOpcode(VoiceOpCodes.HEARTBEAT, Date.now());
 		}, interval).unref();
 	}
+
 	selectProtocols() {
 		const videoCodecSelected = VideoCodecProtocols[this.manager.videoCodec];
 		this.sendOpcode(VoiceOpCodes.SELECT_PROTOCOL, {
@@ -109,6 +118,7 @@ class VoiceConnection {
 		});
 		return this;
 	}
+
 	handleSessionDescription(d: { secret_key: Uint8Array }) {
 		this.secretkey = new Uint8Array(d.secret_key);
 		if (this.udp) {
@@ -116,6 +126,7 @@ class VoiceConnection {
 		}
 		return this;
 	}
+
 	connect(timeout = 30_000, isResume = false): Promise<this> {
 		return new Promise((resolve, reject) => {
 			if (!this.wsEndpoint || !this.token) {
@@ -218,6 +229,7 @@ class VoiceConnection {
 			}, 100).unref();
 		});
 	}
+
 	doResume() {
 		this.sendOpcode(VoiceOpCodes.RESUME, {
 			server_id: this.guildId ?? this.channelId,
@@ -225,6 +237,7 @@ class VoiceConnection {
 			token: this.token,
 		});
 	}
+
 	doIdentify(video = true) {
 		this.sendOpcode(VoiceOpCodes.IDENTIFY, {
 			server_id: this.serverId ?? this.guildId ?? this.channelId,
@@ -235,10 +248,12 @@ class VoiceConnection {
 			streams: [{ type: 'screen', rid: '100', quality: 100 }],
 		});
 	}
+
 	sendOpcode(op: number, data: any) {
 		// console.log("Voice connection send", { op, d: data });
 		this.ws?.send(JSON.stringify({ op, d: data }));
 	}
+
 	setVideoStatus(bool: boolean) {
 		const videoData = getResolutionData(this.manager?.resolution);
 		this.sendOpcode(VoiceOpCodes.SOURCES, {
@@ -264,6 +279,7 @@ class VoiceConnection {
 			],
 		});
 	}
+
 	setSpeaking(speaking: boolean) {
 		// audio
 		this.sendOpcode(VoiceOpCodes.SPEAKING, {
@@ -272,12 +288,15 @@ class VoiceConnection {
 			ssrc: this.ssrc,
 		});
 	}
+
 	disconnect() {
 		this.ws?.close();
 		this.udp?.stop();
 	}
 	// @ts-ignore
-	createStream(): Promise<this> {}
+	createStream(): Promise<this> {
+		throw new DiscordStreamClientError('STREAM_CONNECTION_FAILED');
+	}
 }
 
 export default VoiceConnection;

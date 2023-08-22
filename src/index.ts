@@ -12,7 +12,7 @@ import {
 	VoiceChannelResolvable,
 } from 'discord.js-selfbot-v13';
 import { DiscordStreamClientError, ErrorCodes } from './Util/Error';
-import { ResolutionType } from './Util/Util';
+import { ResolutionType, parseStreamKey } from './Util/Util';
 import { VideoCodec } from './Util/Constants';
 import { Readable } from 'stream';
 
@@ -25,9 +25,12 @@ declare module 'discord.js-selfbot-v13' {
 interface DiscordStreamClientEvents {
 	debug: (
 		type: 'VoiceConnection' | 'VoiceUDP' | string,
-		message: string,
+		...args: any[]
 	) => void;
-	error: (error: Error) => void;
+	error: (
+		type: 'VoiceConnection' | 'VoiceUDP' | string,
+		error: Error,
+	) => void;
 }
 
 interface DiscordStreamClientVoiceState {
@@ -45,6 +48,10 @@ interface DiscordStreamClient {
 		event: K,
 		listener: DiscordStreamClientEvents[K],
 	): this;
+	emit<K extends keyof DiscordStreamClientEvents>(
+		event: K,
+		...args: Parameters<DiscordStreamClientEvents[K]>
+	): boolean;
 }
 
 class DiscordStreamClient extends EventEmitter {
@@ -67,19 +74,20 @@ class DiscordStreamClient extends EventEmitter {
 		// Inject stream client
 		client.streamClient = this;
 	}
+
 	patch() {
 		this.unpatch();
 		this.client.on('raw', DiscordStreamClient._handleEvents);
 	}
-	sendPacket(packet: {
-		op: number;
-		d: any;
-	}) {
+
+	sendPacket(packet: { op: number; d: any }) {
 		(this.client.ws as any).broadcast(packet);
 	}
+
 	unpatch() {
 		this.client.removeListener('raw', DiscordStreamClient._handleEvents);
 	}
+
 	static _handleEvents(this: Client<true>, packet: { t: string; d: any }) {
 		if (typeof packet !== 'object' || !packet.t || !packet.d) return;
 		const { t: event, d: data } = packet;
@@ -90,114 +98,55 @@ class DiscordStreamClient extends EventEmitter {
 		} else if (event === 'VOICE_SERVER_UPDATE') {
 			this.streamClient.connection?.setServer(data);
 		} else if (event === 'STREAM_CREATE') {
-			const StreamKey = data.stream_key.split(':');
-			if (StreamKey[0] == 'guild') {
-				const [type, guildId, channelId, userId] = StreamKey;
-				if (this.streamClient.connection?.channelId != channelId)
-					return;
-				if (userId === this.user.id) {
-					(
-						(this.streamClient.connection as VoiceConnection)
-							.streamConnection as StreamConnection
-					).serverId = data.rtc_server_id;
-					(
-						(this.streamClient.connection as VoiceConnection)
-							.streamConnection as StreamConnection
-					).streamKey = data.stream_key;
-					(
-						(this.streamClient.connection as VoiceConnection)
-							.streamConnection as StreamConnection
-					).setSession(
-						this.streamClient.connection?.sessionId as string,
-					);
-				}
-			} else if (StreamKey[0] == 'call') {
-				const [type, channelId, userId] = StreamKey;
-				if (this.streamClient.connection?.channelId != channelId)
-					return;
-				if (userId === this.user.id) {
-					(
-						(this.streamClient.connection as VoiceConnection)
-							.streamConnection as StreamConnection
-					).serverId = data.rtc_server_id;
-					(
-						(this.streamClient.connection as VoiceConnection)
-							.streamConnection as StreamConnection
-					).streamKey = data.stream_key;
-					(
-						(this.streamClient.connection as VoiceConnection)
-							.streamConnection as StreamConnection
-					).setSession(
-						this.streamClient.connection?.sessionId as string,
-					);
-				}
+			const StreamKey = parseStreamKey(data.stream_key);
+			if (this.streamClient.connection?.channelId != StreamKey.channelId)
+				return;
+			if (StreamKey.userId === this.user.id) {
+				(
+					(this.streamClient.connection as VoiceConnection)
+						.streamConnection as StreamConnection
+				).serverId = data.rtc_server_id;
+				(
+					(this.streamClient.connection as VoiceConnection)
+						.streamConnection as StreamConnection
+				).streamKey = data.stream_key;
+				(
+					(this.streamClient.connection as VoiceConnection)
+						.streamConnection as StreamConnection
+				).setSession(this.streamClient.connection?.sessionId as string);
 			}
 		} else if (event === 'STREAM_SERVER_UPDATE') {
-			const StreamKey = data.stream_key.split(':');
-			if (StreamKey[0] == 'guild') {
-				const [type, guildId, channelId, userId] = StreamKey;
-				if (
-					(this.streamClient.connection as VoiceConnection).guildId !=
-					guildId
-				)
-					return;
-				if (this.streamClient.connection?.channelId != channelId)
-					return;
-				if (userId === this.user.id) {
-					(
-						(this.streamClient.connection as VoiceConnection)
-							.streamConnection as StreamConnection
-					).setServer(data);
-				}
-			} else if (StreamKey[0] == 'call') {
-				const [type, channelId, userId] = StreamKey;
-				if (this.streamClient.connection?.channelId != channelId)
-					return;
-				if (userId === this.user.id) {
-					(
-						(this.streamClient.connection as VoiceConnection)
-							.streamConnection as StreamConnection
-					).setServer(data);
-				}
+			const StreamKey = parseStreamKey(data.stream_key);
+			if (this.streamClient.connection?.channelId != StreamKey.channelId)
+				return;
+			if (StreamKey.userId === this.user.id) {
+				(
+					(this.streamClient.connection as VoiceConnection)
+						.streamConnection as StreamConnection
+				).setServer(data);
 			}
 		} else if (event === 'STREAM_DELETE') {
-			const StreamKey = data.stream_key.split(':');
-			if (StreamKey[0] == 'guild') {
-				const [type, guildId, channelId, userId] = StreamKey;
-				if (
-					(this.streamClient.connection as VoiceConnection).guildId !=
-					guildId
-				)
-					return;
-				if (this.streamClient.connection?.channelId != channelId)
-					return;
-				if (userId === this.user.id) {
-					(
-						this.streamClient.connection as VoiceConnection
-					).disconnect();
-				}
-			} else if (StreamKey[0] == 'call') {
-				const [type, channelId, userId] = StreamKey;
-				if (this.streamClient.connection?.channelId != channelId)
-					return;
-				if (userId === this.user.id) {
-					(
-						this.streamClient.connection as VoiceConnection
-					).disconnect();
-				}
+			const StreamKey = parseStreamKey(data.stream_key);
+			if (this.streamClient.connection?.channelId != StreamKey.channelId)
+				return;
+			if (StreamKey.userId === this.user.id) {
+				(this.streamClient.connection as VoiceConnection).disconnect();
 			}
 		}
 	}
+
 	setResolution(resolution: ResolutionType) {
 		if (!['1440p', '1080p', '720p', '480p', 'auto'].includes(resolution))
 			throw new DiscordStreamClientError('INVALID_RESOLUTION');
 		this.resolution = resolution;
 	}
+
 	setVideoCodec(codec: VideoCodec) {
 		if (!['VP8', 'H264'].includes(codec))
 			throw new DiscordStreamClientError('INVALID_CODEC');
 		this.videoCodec = codec;
 	}
+
 	signalVoiceChannel(
 		{ selfDeaf, selfMute, selfVideo } = {} as {
 			selfDeaf?: boolean;
@@ -222,6 +171,7 @@ class DiscordStreamClient extends EventEmitter {
 			},
 		});
 	}
+
 	joinVoiceChannel(
 		channel: VoiceChannel | DMChannel | PartialGroupDMChannel,
 		{ selfMute = false, selfDeaf = false, selfVideo = false } = {},
@@ -272,6 +222,7 @@ class DiscordStreamClient extends EventEmitter {
 				}, 100).unref();
 			});
 		};
+	
 		return new Promise((resolve, reject) => {
 			let timeoutId = setTimeout(() => {
 				reject(
@@ -287,6 +238,7 @@ class DiscordStreamClient extends EventEmitter {
 			}, 100).unref();
 		});
 	}
+
 	leaveVoiceChannel() {
 		// Todo
 		this.unpatch();
@@ -295,6 +247,7 @@ class DiscordStreamClient extends EventEmitter {
 		this.connection?.disconnect();
 		this.connection = undefined;
 	}
+
 	signalScreenShare() {
 		if (!this.connection?.streamConnection)
 			throw new DiscordStreamClientError('NO_STREAM_CONNECTION');
@@ -324,6 +277,7 @@ class DiscordStreamClient extends EventEmitter {
 			d: data,
 		});
 	}
+
 	pauseScreenShare(isPause = false) {
 		if (!this.connection?.streamConnection) return;
 		let streamKey;
@@ -344,6 +298,7 @@ class DiscordStreamClient extends EventEmitter {
 			},
 		});
 	}
+
 	stopScreenShare() {
 		if (!this.connection?.streamConnection) return;
 		let streamKey;
@@ -363,6 +318,7 @@ class DiscordStreamClient extends EventEmitter {
 		});
 		this.connection.streamConnection = undefined;
 	}
+
 	createPlayer(
 		playable: string | Readable,
 		udpConnection: VoiceUDP,
