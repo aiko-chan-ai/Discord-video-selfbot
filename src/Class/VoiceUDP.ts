@@ -17,21 +17,28 @@ function parseLocalPacket(message: any) {
 	return { ip, port };
 }
 
+const KEEP_ALIVE_INTERVAL = 5e3;
+const MAX_COUNTER_VALUE = 2 ** 32 - 1;
+
 class VoiceUDP {
 	voiceConnection!: VoiceConnection;
-	nonce: number;
+	nonce = 0;
 	socket?: Socket;
-	ready: boolean;
+	ready = false;
 	audioPacketizer: AudioPacketizer;
 	videoPacketizer: VideoPacketizer;
+	keepAliveBuffer = Buffer.alloc(8);
+	keepAliveCounter = 0;
+	keepAliveInterval?: NodeJS.Timer;
 	constructor(voiceConnection: VoiceConnection) {
 		Object.defineProperty(this, 'voiceConnection', {
 			value: voiceConnection,
 		});
-		this.nonce = 0;
-		this.ready = false;
 		this.audioPacketizer = new AudioPacketizer(this);
-		this.videoPacketizer = new VideoPacketizer(this, this.voiceConnection.manager.videoCodec);
+		this.videoPacketizer = new VideoPacketizer(
+			this,
+			this.voiceConnection.manager.videoCodec,
+		);
 	}
 
 	connect() {
@@ -44,19 +51,24 @@ class VoiceUDP {
 
 			this.socket.once('message', (message: any) => {
 				if (message.readUInt16BE(0) !== 2) {
-					reject('wrong handshake packet for udp');
+					reject('Wrong handshake packet for UDP');
 				}
 				try {
 					const packet = parseLocalPacket(message);
 					this.voiceConnection.selfIp = packet.ip;
 					this.voiceConnection.selfPort = packet.port;
 					this.voiceConnection.selectProtocols();
+					// Ok
+					this.keepAliveInterval = setInterval(
+						() => this.keepAlive(),
+						KEEP_ALIVE_INTERVAL,
+					).unref();
+					setImmediate(() => this.keepAlive()).unref();
 				} catch (e) {
 					reject(e);
 				}
 				this.socket?.on('message', this.handleIncoming);
 			});
-
 			this.sendBlankPacket();
 			resolve(true);
 		});
@@ -118,6 +130,9 @@ class VoiceUDP {
 		this.ready = false;
 		try {
 			this.socket?.disconnect();
+			clearInterval(this.keepAliveInterval as NodeJS.Timer);
+			this.keepAliveBuffer = Buffer.alloc(8);
+			this.keepAliveCounter = 0;
 		} catch (e) {
 			// ERR_SOCKET_DGRAM_NOT_CONNECTED
 		}
@@ -130,6 +145,15 @@ class VoiceUDP {
 		if (this.nonce > max_int32bit) this.nonce = 0;
 		nonceBuffer.writeUInt32BE(this.nonce, 0);
 		return nonceBuffer;
+	}
+
+	keepAlive() {
+		this.keepAliveBuffer.writeUInt32LE(this.keepAliveCounter, 0);
+		this.sendPacket(this.keepAliveBuffer);
+		this.keepAliveCounter++;
+		if (this.keepAliveCounter > MAX_COUNTER_VALUE) {
+			this.keepAliveCounter = 0;
+		}
 	}
 }
 
