@@ -58,6 +58,7 @@ class Player extends EventEmitter {
 		ffmpeg: string;
 		ffprobe: string;
 	};
+	volumeManager?: prism.VolumeTransformer;
 	constructor(
 		playable: string | Readable,
 		voiceUdp: VoiceUDP,
@@ -82,6 +83,7 @@ class Player extends EventEmitter {
 		}
 		this.checkFFmpegAndFFprobeExists();
 	}
+
 	checkFFmpegAndFFprobeExists() {
 		return new Promise((resolve, reject) => {
 			ffmpeg.getAvailableEncoders((err, encoders) => {
@@ -93,6 +95,7 @@ class Player extends EventEmitter {
 			});
 		});
 	}
+
 	validateInputMetadata(input: any): Promise<{
 		audio: boolean;
 		video: boolean;
@@ -137,6 +140,7 @@ class Player extends EventEmitter {
 			}
 		});
 	}
+
 	play(options: PlayOptions = {}): Promise<boolean> {
 		return new Promise(async (resolve, reject) => {
 			if (typeof options !== 'object' || Array.isArray(options)) {
@@ -155,7 +159,7 @@ class Player extends EventEmitter {
 			) {
 				this.videoOutput = new IvfTransformer();
 			}
-			// get header frame time (VP8)
+
 			this.videoOutput.on('header', (header: any) => {
 				(this.videoStream as VideoStream).setSleepTime(
 					getFrameDelayInMilliseconds(header),
@@ -286,17 +290,26 @@ class Player extends EventEmitter {
 					this.audioStream = new AudioStream(
 						this.voiceUdp as VoiceUDP,
 					);
-					// make opus stream
 					this.opusStream = new prism.opus.Encoder({
 						channels: 2,
 						rate: 48000,
 						frameSize: 960,
 					});
+					this.volumeManager = new prism.VolumeTransformer({
+						type: 's16le',
+						volume:
+							options.volume &&
+							typeof options.volume === 'number' &&
+							options.volume >= 0
+								? options.volume
+								: 1,
+					});
+					this.volumeManager.pipe(this.opusStream);
 					this.audioStream.on('finish', () => {
 						this.emit('finishAudio');
 					});
 					this.command
-						.output(StreamOutput(this.opusStream).url, {
+						.output(StreamOutput(this.volumeManager).url, {
 							end: false,
 						})
 						.noVideo()
@@ -311,15 +324,6 @@ class Player extends EventEmitter {
 						this.command.audioBitrate(`${options?.kbpsAudio}k`);
 					} else {
 						this.command.audioBitrate('128k');
-					}
-					if (
-						options.volume &&
-						typeof options.volume === 'number' &&
-						options.volume >= 0
-					) {
-						this.command.audioFilters(
-							`volume=${(options.volume / 100).toFixed(1)}`,
-						);
 					}
 				}
 				if (isHttpUrl) {
@@ -354,14 +358,17 @@ class Player extends EventEmitter {
 			}
 		});
 	}
+
 	stop() {
 		return this.#stop(true);
 	}
+
 	#stop(isCleanData: boolean = true) {
 		if (this.command) {
 			this.videoOutput.destroy();
 			this.opusStream?.destroy();
 			this.audioStream?.destroy();
+			this.volumeManager?.destroy();
 			this.videoStream.destroy();
 			this.command.kill('SIGINT');
 			this.command = undefined;
@@ -371,15 +378,16 @@ class Player extends EventEmitter {
 				this.#startTime = 0;
 				this.#cachedDuration = 0;
 				this.metadata = undefined;
+				this.volumeManager = undefined;
 			}
 		}
 		return new Promise((resolve) => {
 			setTimeout(() => {
 				resolve(true);
 			}, 500);
-			// Make sure ffmpeg is killed
 		});
 	}
+
 	pause() {
 		if (!this.command)
 			throw new DiscordStreamClientError('PLAYER_NOT_PLAYING');
@@ -389,6 +397,7 @@ class Player extends EventEmitter {
 		this.#cachedDuration = Date.now() - this.#startTime;
 		return this;
 	}
+
 	resume() {
 		if (!this.command)
 			throw new DiscordStreamClientError('PLAYER_NOT_PLAYING');
@@ -398,6 +407,7 @@ class Player extends EventEmitter {
 		this.#startTime = Date.now() - this.#cachedDuration;
 		return this;
 	}
+
 	seek(time: number) {
 		if (typeof time !== 'number' || isNaN(time))
 			throw new DiscordStreamClientError('INVALID_SEEK_TIME');
@@ -412,28 +422,27 @@ class Player extends EventEmitter {
 		);
 		return this;
 	}
-	setVolume(volume: number) {
-		if (typeof volume !== 'number' || isNaN(volume) || volume < 0)
-			throw new DiscordStreamClientError('INVALID_VOLUME');
-		(this.playOptions as PlayOptions).volume = volume;
-		this.seek(this.currentTime);
-		return this;
-	}
+
 	get isPlaying() {
 		return this.command !== null;
 	}
+
 	get isPaused() {
 		return this.#isPaused;
 	}
+
 	get isStarted() {
 		return this.#isStarted;
 	}
+
 	get duration() {
 		return this.metadata?.format?.duration || 0;
 	}
+
 	get formattedDuration() {
 		return formatDuration(this.duration);
 	}
+
 	get currentTime() {
 		if (this.#startTime == 0) return 0;
 		if (this.#isPaused == true) {
@@ -442,6 +451,7 @@ class Player extends EventEmitter {
 			return (Date.now() - this.#startTime) / 1000;
 		}
 	}
+
 	get formattedCurrentTime() {
 		return formatDuration(this.currentTime);
 	}

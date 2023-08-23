@@ -301,7 +301,7 @@ class VoiceConnection {
 		this.udp?.stop();
 	}
 	// @ts-ignore
-	createStream(): Promise<this> {
+	createStream(): Promise<StreamConnection> {
 		throw new DiscordStreamClientError('STREAM_CONNECTION_FAILED');
 	}
 }
