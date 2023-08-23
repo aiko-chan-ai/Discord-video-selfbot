@@ -1,5 +1,5 @@
-import { crypto_secretbox_easy } from 'libsodium-wrappers';
 import VoiceUDP from '../Class/VoiceUDP';
+import { DiscordStreamClientError } from '../Util/Error';
 
 export const max_int16bit = 2 ** 16 - 1;
 export const max_int32bit = 2 ** 32 - 1;
@@ -136,11 +136,18 @@ export class BaseMediaPacketizer {
 		message: string | Uint8Array,
 		nonceBuffer: Buffer,
 	): Uint8Array {
-		return crypto_secretbox_easy(
-			message,
-			nonceBuffer,
-			this._connection.voiceConnection.secretkey as Uint8Array,
-		);
+		if (
+			this.connection.voiceConnection.manager.encryptionMode ===
+			'xsalsa20_poly1305_lite'
+		) {
+			return this.connection.voiceConnection.manager.methods.close(
+				message,
+				nonceBuffer,
+				this._connection.voiceConnection.secretkey as Uint8Array,
+			);
+		} else {
+			throw new DiscordStreamClientError('ENCRYPTION_MODE_NOT_SUPPORTED');
+		}
 	}
 
 	public get connection(): VoiceUDP {

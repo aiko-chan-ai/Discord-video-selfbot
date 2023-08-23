@@ -83,38 +83,53 @@ class VoiceUDP {
 		blank.writeUInt16BE(1, 0);
 		blank.writeUInt16BE(70, 2);
 		blank.writeUInt32BE(this.voiceConnection.ssrc as number, 4);
-		this.sendPacket(blank);
+		this.sendPacket(blank, 'unknown');
 	}
 
-	sendPacket(packet: any) {
-		return new Promise((resolve, reject) => {
-			// console.log('SENDING PACKET', packet);
-			try {
-				this.socket?.send(
-					packet,
-					0,
-					packet.length,
-					this.voiceConnection.port,
-					this.voiceConnection.address,
-					(error: any, bytes: any) => {
-						if (error) {
-							// console.log('ERROR', error);
-							reject(error);
-						}
-						resolve(true);
-					},
-				);
-			} catch (e) {
-				reject(e);
-			}
-		});
+	sendPacket(packet: any, type: 'video' | 'audio' | 'unknown') {
+		if (type === 'audio') {
+			this.voiceConnection.setSpeaking(true);
+		} else if (type === 'video') {
+			this.voiceConnection.setVideoStatus(true);
+		}
+		if (!this.socket) {
+			return this.voiceConnection.manager.emit(
+				'debug',
+				'VoiceUDP',
+				'Failed to send a packet - no UDP socket',
+			);
+		}
+		this.socket?.send(
+			packet,
+			0,
+			packet.length,
+			this.voiceConnection.port,
+			this.voiceConnection.address,
+			(error: any, bytes: any) => {
+				if (error) {
+					if (type === 'audio') {
+						this.voiceConnection.setSpeaking(true);
+					} else if (type === 'video') {
+						this.voiceConnection.setVideoStatus(true);
+					}
+					this.voiceConnection.manager.emit(
+						'debug',
+						'VoiceUDP',
+						`Failed to send a packet - ${error}`,
+					);
+				} else {
+					this.voiceConnection.manager.emit(
+						'debug',
+						'VoiceUDP',
+						`Sent a packet - ${bytes} bytes`,
+					);
+				}
+			},
+		);
 	}
 
 	sendAudioFrame(frame: any) {
-		if (!this.ready) return;
-		const packet = this.audioPacketizer.createPacket(frame);
-		this.sendPacket(packet);
-		this.audioPacketizer.onFrameSent();
+		this.audioPacketizer.sendFrame(frame);
 	}
 
 	/**
@@ -149,7 +164,7 @@ class VoiceUDP {
 
 	keepAlive() {
 		this.keepAliveBuffer.writeUInt32LE(this.keepAliveCounter, 0);
-		this.sendPacket(this.keepAliveBuffer);
+		this.sendPacket(this.keepAliveBuffer, 'unknown');
 		this.keepAliveCounter++;
 		if (this.keepAliveCounter > MAX_COUNTER_VALUE) {
 			this.keepAliveCounter = 0;

@@ -15,6 +15,7 @@ import { DiscordStreamClientError, ErrorCodes } from './Util/Error';
 import { ResolutionType, parseStreamKey } from './Util/Util';
 import { VideoCodec } from './Util/Constants';
 import { Readable } from 'stream';
+import { methods } from './Util/Library';
 
 declare module 'discord.js-selfbot-v13' {
 	interface Client {
@@ -54,6 +55,8 @@ interface DiscordStreamClient {
 	): boolean;
 }
 
+type EncryptionMode = 'xsalsa20_poly1305_lite' | 'xsalsa20_poly1305_suffix' | 'xsalsa20_poly1305';
+
 class DiscordStreamClient extends EventEmitter {
 	client!: Client;
 	connection?: VoiceConnection;
@@ -66,6 +69,12 @@ class DiscordStreamClient extends EventEmitter {
 	player?: Player;
 	resolution: ResolutionType = '1080p';
 	videoCodec: VideoCodec = 'H264';
+	encryptionMode: EncryptionMode = 'xsalsa20_poly1305_lite';
+	methods!: {
+		open: any;
+		close: any;
+		random: (n: any) => any;
+	}
 	constructor(client: Client) {
 		super();
 		if (!client || !(client instanceof Client))
@@ -73,6 +82,11 @@ class DiscordStreamClient extends EventEmitter {
 		Object.defineProperty(this, 'client', { value: client });
 		// Inject stream client
 		client.streamClient = this;
+		this._initModules();
+	}
+
+	private _initModules() {
+		this.methods = methods;
 	}
 
 	patch() {
@@ -145,6 +159,12 @@ class DiscordStreamClient extends EventEmitter {
 		if (!['VP8', 'H264'].includes(codec))
 			throw new DiscordStreamClientError('INVALID_CODEC');
 		this.videoCodec = codec;
+	}
+
+	setEncryptionMode(mode: EncryptionMode) {
+		if (mode !== 'xsalsa20_poly1305_lite')
+			throw new DiscordStreamClientError('ENCRYPTION_MODE_NOT_SUPPORTED');
+		this.encryptionMode = mode;
 	}
 
 	signalVoiceChannel(
@@ -331,14 +351,12 @@ class DiscordStreamClient extends EventEmitter {
 			throw new DiscordStreamClientError('NO_STREAM_CONNECTION');
 		const player = new Player(playable, udpConnection, ffmpegPath);
 		player.once('spawnProcess', () => {
-			udpConnection.voiceConnection.setSpeaking(true);
-			udpConnection.voiceConnection.setVideoStatus(true);
-			udpConnection.voiceConnection.manager.pauseScreenShare(false);
+			this.pauseScreenShare(false);
 		});
 		player.once('finish', () => {
 			udpConnection.voiceConnection.setSpeaking(false);
 			udpConnection.voiceConnection.setVideoStatus(false);
-			udpConnection.voiceConnection.manager.pauseScreenShare(true);
+			this.pauseScreenShare(true);
 			this.player = undefined;
 		});
 		return player;

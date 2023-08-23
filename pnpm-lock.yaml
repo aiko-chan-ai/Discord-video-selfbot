@@ -17,9 +17,6 @@ dependencies:
   fluent-ffmpeg-util:
     specifier: ^0.2.0-alpha.1
     version: 0.2.0-alpha.1
-  libsodium-wrappers:
-    specifier: ^0.7.10
-    version: 0.7.11
   prism-media:
     specifier: ^1.3.4
     version: 1.3.5(@discordjs/opus@0.8.0)
@@ -31,9 +28,6 @@ devDependencies:
   '@types/fluent-ffmpeg':
     specifier: ^2.1.21
     version: 2.1.21
-  '@types/libsodium-wrappers':
-    specifier: ^0.7.10
-    version: 0.7.10
   esbuild-plugin-version-injector:
     specifier: ^1.1.0
     version: 1.2.0
@@ -342,10 +336,6 @@ packages:
     resolution: {integrity: sha512-+n3dy/Tegt6n+YwGZUiGq6i8Jrnt8+MoyPiW1L6J5EWUl7GSt18a/VyReecfCsvTTNBXNMIKOMHDstiQM8nJLA==}
     dependencies:
       '@types/node': 20.4.8
-    dev: true
-
-  /@types/libsodium-wrappers@0.7.10:
-    resolution: {integrity: sha512-BqI9B92u+cM3ccp8mpHf+HzJ8fBlRwdmyd6+fz3p99m3V6ifT5O3zmOMi612PGkpeFeG/G6loxUnzlDNhfjPSA==}
     dev: true
 
   /@types/node@20.4.8:
@@ -761,16 +751,6 @@ packages:
     resolution: {integrity: sha512-34wB/Y7MW7bzjKRjUKTa46I2Z7eV62Rkhva+KkopW7Qvv/OSWBqvkSY7vusOPrNuZcUG3tApvdVgNB8POj3SPw==}
     engines: {node: '>=10'}
     dev: true
-
-  /libsodium-wrappers@0.7.11:
-    resolution: {integrity: sha512-SrcLtXj7BM19vUKtQuyQKiQCRJPgbpauzl3s0rSwD+60wtHqSUuqcoawlMDheCJga85nKOQwxNYQxf/CKAvs6Q==}
-    dependencies:
-      libsodium: 0.7.11
-    dev: false
-
-  /libsodium@0.7.11:
-    resolution: {integrity: sha512-WPfJ7sS53I2s4iM58QxY3Inb83/6mjlYgcmZs7DJsvDlnmVUwNinBCi5vBT43P6bHRy01O4zsMU2CoVR6xJ40A==}
-    dev: false
 
   /lilconfig@2.1.0:
     resolution: {integrity: sha512-utWOt/GHzuUxnLKxB6dk81RoOeoNeHgbrXiuGk4yyF5qlRz+iIVWu56E2fqGHFrXz0QNUhLB/8nKqvRH66JKGQ==}

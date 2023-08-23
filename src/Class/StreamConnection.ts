@@ -6,11 +6,4 @@ export default class StreamConnection extends VoiceConnection {
 	streamConnection: undefined;
 	streamKey?: string;
     // video
-	setSpeaking(speaking: boolean) {
-		this.sendOpcode(VoiceOpCodes.SPEAKING, {
-			delay: 0,
-			speaking: speaking ? 2 : 0,
-			ssrc: this.ssrc,
-		});
-	}
 }

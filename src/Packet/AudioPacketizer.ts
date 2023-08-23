@@ -9,7 +9,7 @@ export class AudioPacketizer extends BaseMediaPacketizer {
 
 	public sendFrame(frame: any): void {
 		const packet = this.createPacket(frame);
-		this.connection.sendPacket(packet);
+		this.connection.sendPacket(packet, 'audio');
 		this.onFrameSent();
 	}
 

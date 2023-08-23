@@ -28,6 +28,8 @@ class VoiceConnection {
 	secretkey?: Uint8Array;
 	manager!: DiscordStreamClient;
 	streamConnection?: StreamConnection;
+	isSpeakingAudio = false;
+	isSpeakingVideo = false;
 	constructor(
 		manager: DiscordStreamClient,
 		guildId?: Snowflake,
@@ -113,7 +115,7 @@ class VoiceConnection {
 			data: {
 				address: this.selfIp,
 				port: this.selfPort,
-				mode: 'xsalsa20_poly1305_lite',
+				mode: this.manager.encryptionMode,
 			},
 		});
 		return this;
@@ -164,6 +166,7 @@ class VoiceConnection {
 			});
 			this.ws.on('message', (data: string) => {
 				const { op, d } = JSON.parse(data);
+				// console.log('Voice connection message', op, d);
 				switch (op) {
 					case VoiceOpCodes.READY: {
 						this.handleReady(d);
@@ -255,6 +258,7 @@ class VoiceConnection {
 	}
 
 	setVideoStatus(bool: boolean) {
+		if (bool === this.isSpeakingVideo) return;
 		const videoData = getResolutionData(this.manager?.resolution);
 		this.sendOpcode(VoiceOpCodes.SOURCES, {
 			audio_ssrc: this.ssrc,
@@ -278,15 +282,18 @@ class VoiceConnection {
 				},
 			],
 		});
+		this.isSpeakingVideo = bool;
 	}
 
 	setSpeaking(speaking: boolean) {
+		if (speaking === this.isSpeakingAudio) return;
 		// audio
 		this.sendOpcode(VoiceOpCodes.SPEAKING, {
 			delay: 0,
 			speaking: speaking ? 1 : 0,
 			ssrc: this.ssrc,
 		});
+		this.isSpeakingAudio = speaking;
 	}
 
 	disconnect() {

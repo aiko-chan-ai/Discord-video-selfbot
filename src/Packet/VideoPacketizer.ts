@@ -1,6 +1,7 @@
 import VoiceUDP from '../Class/VoiceUDP';
 import { BaseMediaPacketizer, max_int16bit } from './BaseMediaPacketizer';
 import { VideoCodec, VideoCodecType } from '../Util/Constants';
+import { DiscordStreamClientError } from '../Util/Error';
 
 // Source: https://github.com/dank074/Discord-video-stream
 
@@ -20,7 +21,7 @@ export class VideoPacketizer extends BaseMediaPacketizer {
 		} else if (this.videoCodec === 'VP8') {
 			this.sendFrameVP8(frame);
 		} else {
-			throw new Error('Unsupported video codec');
+			throw new DiscordStreamClientError('INVALID_CODEC');
 		}
 	}
 
@@ -56,6 +57,7 @@ export class VideoPacketizer extends BaseMediaPacketizer {
 						this.encryptData(packetData, nonceBuffer),
 						nonceBuffer.subarray(0, 4),
 					]),
+					'video',
 				);
 			} else {
 				const data = this.partitionDataMTUSizedChunks(nalu.subarray(1));
@@ -87,6 +89,7 @@ export class VideoPacketizer extends BaseMediaPacketizer {
 							this.encryptData(packetData, nonceBuffer),
 							nonceBuffer.subarray(0, 4),
 						]),
+						'video',
 					);
 				}
 			}
@@ -104,7 +107,7 @@ export class VideoPacketizer extends BaseMediaPacketizer {
 				i === data.length - 1,
 				i === 0,
 			);
-			this.connection.sendPacket(packet);
+			this.connection.sendPacket(packet, 'video');
 		}
 		this.onFrameSent();
 	}
@@ -116,7 +119,7 @@ export class VideoPacketizer extends BaseMediaPacketizer {
 	): Buffer {
 		if (chunk.length > this.mtu)
 			throw new Error(
-				'error packetizing video frame: frame is larger than mtu',
+				'Error packetizing video frame: frame is larger than mtu',
 			);
 		const packetHeader = this.makeRtpHeader(
 			this.connection.voiceConnection.videoSsrc,
@@ -233,7 +236,7 @@ export class VideoPacketizer extends BaseMediaPacketizer {
 		} else if (this.videoCodec === 'VP8') {
 			return this.makeChunkVP8(frameData, isFirstPacket);
 		} else {
-			throw new Error('unsupported video codec');
+			throw new DiscordStreamClientError('INVALID_CODEC');
 		}
 	}
 

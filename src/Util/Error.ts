@@ -2,11 +2,11 @@ type ErrorCode = keyof typeof ErrorCodes;
 
 class DiscordStreamClientError extends Error {
 	code: string;
-    constructor(code: ErrorCode) {
-        super(ErrorCodes[code] ?? 'Unknown error');
-        this.name = "DiscordStreamClientError";
-        this.code = code;
-    }
+	constructor(code: ErrorCode) {
+		super(ErrorCodes[code] ?? 'Unknown error');
+		this.name = 'DiscordStreamClientError';
+		this.code = code;
+	}
 }
 
 const ErrorCodes = {
@@ -30,10 +30,12 @@ const ErrorCodes = {
 	INVALID_SEEK_TIME: 'Invalid seek time (Must be a number)',
 	INVALID_VOLUME: 'Invalid volume (Must be a number between 0 and 200)',
 	INVALID_CODEC: 'Invalid codec (VP8 or H264)',
+	MISSING_ENCRYPTION_MODULE:
+		'Missing encryption module (sodium, libsodium-wrappers or tweetnacl)',
+	INVALID_ENCRYPTION_MODE:
+		'Invalid encryption mode (xsalsa20_poly1305, xsalsa20_poly1305_suffix or xsalsa20_poly1305_lite)',
+	ENCRYPTION_MODE_NOT_SUPPORTED:
+		'Encryption mode not supported (xsalsa20_poly1305_lite is the only supported mode)',
 };
 
-export {
-    DiscordStreamClientError,
-    ErrorCodes,
-	ErrorCode,
-}
+export { DiscordStreamClientError, ErrorCodes, ErrorCode };
