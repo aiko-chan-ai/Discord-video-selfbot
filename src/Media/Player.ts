@@ -292,28 +292,6 @@ class Player extends EventEmitter {
 						rate: 48000,
 						frameSize: 960,
 					});
-					/*
-					const decoder = new prism.opus.Decoder({
-						channels: 2,
-						rate: 48000,
-						frameSize: 960,
-					});
-					const volume = new prism.VolumeTransformer({
-						type: 's16le',
-						volume: 1,
-					});
-					this.opusStream = this.opusStream.pipe(decoder).pipe(volume).pipe(
-						new prism.opus.Encoder({
-							channels: 2,
-							rate: 48000,
-							frameSize: 960,
-						}),
-					);
-					setInterval(() => {
-						console.log('set vol', volume.volume + 0.5);
-						volume.setVolume(volume.volume + 0.5);
-					}, 5000);
-					*/
 					this.audioStream.on('finish', () => {
 						this.emit('finishAudio');
 					});
