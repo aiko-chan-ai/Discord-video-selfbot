@@ -162,8 +162,8 @@ class DiscordStreamClient extends EventEmitter {
 	}
 
 	setEncryptionMode(mode: EncryptionMode) {
-		if (mode !== 'xsalsa20_poly1305_lite')
-			throw new DiscordStreamClientError('ENCRYPTION_MODE_NOT_SUPPORTED');
+		if (!['xsalsa20_poly1305_lite', 'xsalsa20_poly1305_suffix', 'xsalsa20_poly1305'].includes(mode))
+			throw new DiscordStreamClientError('INVALID_ENCRYPTION_MODE');
 		this.encryptionMode = mode;
 	}
 

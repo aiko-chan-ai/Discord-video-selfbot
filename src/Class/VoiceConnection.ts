@@ -253,7 +253,6 @@ class VoiceConnection {
 	}
 
 	sendOpcode(op: number, data: any) {
-		// console.log("Voice connection send", { op, d: data });
 		this.ws?.send(JSON.stringify({ op, d: data }));
 	}
 

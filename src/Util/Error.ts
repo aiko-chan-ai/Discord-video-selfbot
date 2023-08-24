@@ -34,8 +34,6 @@ const ErrorCodes = {
 		'Missing encryption module (sodium, libsodium-wrappers or tweetnacl)',
 	INVALID_ENCRYPTION_MODE:
 		'Invalid encryption mode (xsalsa20_poly1305, xsalsa20_poly1305_suffix or xsalsa20_poly1305_lite)',
-	ENCRYPTION_MODE_NOT_SUPPORTED:
-		'Encryption mode not supported (xsalsa20_poly1305_lite is the only supported mode)',
 };
 
 export { DiscordStreamClientError, ErrorCodes, ErrorCode };

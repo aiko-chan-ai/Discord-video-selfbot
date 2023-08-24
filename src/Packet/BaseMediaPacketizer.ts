@@ -4,11 +4,14 @@ import { DiscordStreamClientError } from '../Util/Error';
 export const max_int16bit = 2 ** 16 - 1;
 export const max_int32bit = 2 ** 32 - 1;
 
+const MAX_NONCE_SIZE = 2 ** 32 - 1;
+const nonce = Buffer.alloc(24);
+
 export class BaseMediaPacketizer {
 	private _payloadType: number;
-	private _mtu: number;
-	private _sequence: number;
-	private _timestamp: number;
+	private _mtu: number = 1200;
+	private _sequence: number = 0;
+	private _timestamp: number = 0;
 	private _connection: VoiceUDP;
 	private _extensionEnabled: boolean;
 
@@ -19,9 +22,6 @@ export class BaseMediaPacketizer {
 	) {
 		this._connection = connection;
 		this._payloadType = payloadType;
-		this._sequence = 0;
-		this._timestamp = 0;
-		this._mtu = 1200;
 		this._extensionEnabled = extensionEnabled;
 	}
 
@@ -68,13 +68,16 @@ export class BaseMediaPacketizer {
 	public makeRtpHeader(ssrc: number, isLastPacket: boolean = true): Buffer {
 		const packetHeader = Buffer.alloc(12);
 
-		packetHeader[0] = (2 << 6) | ((this._extensionEnabled ? 1 : 0) << 4); // set version and flags
+		packetHeader[0] = 0x80 | ((this._extensionEnabled ? 1 : 0) << 4); // set version and flags
 		packetHeader[1] = this._payloadType; // set packet payload
 		if (isLastPacket) packetHeader[1] |= 0b10000000; // mark M bit if last frame
 
 		packetHeader.writeUIntBE(this.getNewSequence(), 2, 2);
 		packetHeader.writeUIntBE(this._timestamp, 4, 4);
 		packetHeader.writeUIntBE(ssrc, 8, 4);
+
+		packetHeader.copy(nonce, 0, 0, 12);
+
 		return packetHeader;
 	}
 
@@ -132,21 +135,42 @@ export class BaseMediaPacketizer {
 
 	// encrypts all data that is not in rtp header.
 	// rtp header extensions and payload headers are also encrypted
-	public encryptData(
-		message: string | Uint8Array,
-		nonceBuffer: Buffer,
-	): Uint8Array {
+	public encryptData(message: string | Uint8Array, header: Buffer): Buffer {
 		if (
 			this.connection.voiceConnection.manager.encryptionMode ===
 			'xsalsa20_poly1305_lite'
 		) {
-			return this.connection.voiceConnection.manager.methods.close(
+			const nonceBuffer = this.connection.getNewNonceBuffer();
+			const data = this.connection.voiceConnection.manager.methods.close(
 				message,
 				nonceBuffer,
 				this._connection.voiceConnection.secretkey as Uint8Array,
 			);
+			return Buffer.concat([header, data, nonceBuffer.subarray(0, 4)]);
+		} else if (
+			this.connection.voiceConnection.manager.encryptionMode ===
+			'xsalsa20_poly1305_suffix'
+		) {
+			const random =
+				this.connection.voiceConnection.manager.methods.random(24);
+			return Buffer.concat([
+				header,
+				this.connection.voiceConnection.manager.methods.close(
+					message,
+					random,
+					this._connection.voiceConnection.secretkey as Uint8Array,
+				),
+				random,
+			]);
 		} else {
-			throw new DiscordStreamClientError('ENCRYPTION_MODE_NOT_SUPPORTED');
+			return Buffer.concat([
+				header,
+				this.connection.voiceConnection.manager.methods.close(
+					message,
+					nonce,
+					this._connection.voiceConnection.secretkey as Uint8Array,
+				),
+			]);
 		}
 	}
 

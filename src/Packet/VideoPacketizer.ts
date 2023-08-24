@@ -50,13 +50,8 @@ export class VideoPacketizer extends BaseMediaPacketizer {
 					this.createHeaderExtension(),
 					nalu,
 				]);
-				const nonceBuffer = this.connection.getNewNonceBuffer();
 				this.connection.sendPacket(
-					Buffer.concat([
-						packetHeader,
-						this.encryptData(packetData, nonceBuffer),
-						nonceBuffer.subarray(0, 4),
-					]),
+					this.encryptData(packetData, packetHeader),
 					'video',
 				);
 			} else {
@@ -82,13 +77,8 @@ export class VideoPacketizer extends BaseMediaPacketizer {
 					);
 
 					// nonce buffer used for encryption. 4 bytes are appended to end of packet
-					const nonceBuffer = this.connection.getNewNonceBuffer();
 					this.connection.sendPacket(
-						Buffer.concat([
-							packetHeader,
-							this.encryptData(packetData, nonceBuffer),
-							nonceBuffer.subarray(0, 4),
-						]),
+						this.encryptData(packetData, packetHeader),
 						'video',
 					);
 				}
@@ -125,16 +115,9 @@ export class VideoPacketizer extends BaseMediaPacketizer {
 			this.connection.voiceConnection.videoSsrc,
 			isLastPacket,
 		);
-
 		const packetData = this.makeChunk(chunk, isFirstPacket);
-
 		// nonce buffer used for encryption. 4 bytes are appended to end of packet
-		const nonceBuffer = this.connection.getNewNonceBuffer();
-		return Buffer.concat([
-			packetHeader,
-			this.encryptData(packetData, nonceBuffer),
-			nonceBuffer.subarray(0, 4),
-		]);
+		return this.encryptData(packetData, packetHeader);
 	}
 
 	/**
