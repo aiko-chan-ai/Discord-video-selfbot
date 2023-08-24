@@ -15,7 +15,6 @@ import { DiscordStreamClientError, ErrorCodes, ErrorCode } from '../Util/Error';
 interface PlayOptions {
 	kbpsVideo?: number;
 	kbpsAudio?: number;
-	fps?: number;
 	hwaccel?: boolean;
 	volume?: number;
 	// @ts-ignore
@@ -234,6 +233,20 @@ class Player extends EventEmitter {
 				const videoStream = this.metadata?.streams.find(
 					(s) => s.codec_type === 'video',
 				);
+				const evalGetFPS = (str: string) => {
+					try {
+						return eval(str);
+					} catch {
+						return 0;
+					}
+				}
+				// FPS
+				const fpsOutput =
+					evalGetFPS(videoStream?.r_frame_rate || '') ||
+					evalGetFPS(videoStream?.avg_frame_rate || '');
+				if (fpsOutput) {
+					this.voiceUdp.videoPacketizer.fps = fpsOutput;
+				}
 				if (
 					videoResolutionData.type === 'fixed' &&
 					videoStream &&
@@ -260,14 +273,6 @@ class Player extends EventEmitter {
 					this.command.videoBitrate(
 						`${Number(bitrate.toFixed(1)) * 1000}k`,
 					);
-				}
-				if (
-					options?.fps &&
-					typeof options?.fps === 'number' &&
-					options?.fps > 0
-				) {
-					this.command.fpsOutput(options?.fps);
-					this.voiceUdp.videoPacketizer.fps = options?.fps;
 				}
 				if (
 					this.voiceUdp.voiceConnection.manager.videoCodec == 'H264'
