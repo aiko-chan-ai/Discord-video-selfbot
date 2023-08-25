@@ -13,7 +13,7 @@ import {
 } from 'discord.js-selfbot-v13';
 import { DiscordStreamClientError, ErrorCodes } from './Util/Error';
 import { ResolutionType, parseStreamKey } from './Util/Util';
-import { VideoCodec } from './Util/Constants';
+import { VideoCodec, VideoTestCardBase64 } from './Util/Constants';
 import { Readable } from 'stream';
 import { methods } from './Util/Library';
 
@@ -55,7 +55,10 @@ interface DiscordStreamClient {
 	): boolean;
 }
 
-type EncryptionMode = 'xsalsa20_poly1305_lite' | 'xsalsa20_poly1305_suffix' | 'xsalsa20_poly1305';
+type EncryptionMode =
+	| 'xsalsa20_poly1305_lite'
+	| 'xsalsa20_poly1305_suffix'
+	| 'xsalsa20_poly1305';
 
 class DiscordStreamClient extends EventEmitter {
 	client!: Client;
@@ -74,7 +77,7 @@ class DiscordStreamClient extends EventEmitter {
 		open: any;
 		close: any;
 		random: (n: any) => any;
-	}
+	};
 	#isPauseScreenShare = false;
 	constructor(client: Client) {
 		super();
@@ -163,7 +166,13 @@ class DiscordStreamClient extends EventEmitter {
 	}
 
 	setEncryptionMode(mode: EncryptionMode) {
-		if (!['xsalsa20_poly1305_lite', 'xsalsa20_poly1305_suffix', 'xsalsa20_poly1305'].includes(mode))
+		if (
+			![
+				'xsalsa20_poly1305_lite',
+				'xsalsa20_poly1305_suffix',
+				'xsalsa20_poly1305',
+			].includes(mode)
+		)
 			throw new DiscordStreamClientError('INVALID_ENCRYPTION_MODE');
 		this.encryptionMode = mode;
 	}
@@ -214,7 +223,7 @@ class DiscordStreamClient extends EventEmitter {
 			channel.id,
 		);
 		// Inject stream connection
-		this.connection.createStream = function () {
+		this.connection.createStream = function (postTestCard = true) {
 			this.streamConnection = new StreamConnection(
 				this.manager,
 				this.guildId,
@@ -239,11 +248,17 @@ class DiscordStreamClient extends EventEmitter {
 						clearTimeout(timeoutId);
 						clearInterval(i);
 						resolve(this.streamConnection.connect());
+						// Send test card
+						if (postTestCard) {
+							this.manager.client.user?.voice.postPreview(
+								VideoTestCardBase64,
+							);
+						}
 					}
 				}, 100).unref();
 			});
 		};
-	
+
 		return new Promise((resolve, reject) => {
 			let timeoutId = setTimeout(() => {
 				reject(

@@ -128,7 +128,7 @@ export class BaseMediaPacketizer {
 
 	// encrypts all data that is not in rtp header.
 	// rtp header extensions and payload headers are also encrypted
-	public encryptData(message: string | Uint8Array, header: Buffer): Buffer {
+	public encryptData(message: Uint8Array, header: Buffer): Buffer {
 		if (
 			this.voiceUDP.voiceConnection.manager.encryptionMode ===
 			'xsalsa20_poly1305_lite'
