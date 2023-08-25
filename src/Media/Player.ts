@@ -1,15 +1,14 @@
 import ffmpeg from 'fluent-ffmpeg';
 import * as util from 'fluent-ffmpeg-util';
-import { getFrameDelayInMilliseconds, IvfTransformer } from './Util/ivfreader';
-import { H264NalSplitter } from './Util/H264NalSplitter';
-import prism from 'prism-media';
-import { VideoStream } from './videoStream';
-import { AudioStream } from './audioStream';
-import { StreamOutput } from '@aikochan2k6/fluent-ffmpeg-multistream-ts';
-import { formatDuration, getResolutionData } from '../Util/Util';
-import EventEmitter from 'events';
-import VoiceUDP from '../Class/VoiceUDP';
 import { Readable } from 'stream';
+import EventEmitter from 'events';
+import prism from 'prism-media';
+import { StreamOutput } from '@aikochan2k6/fluent-ffmpeg-multistream-ts';
+import { getFrameDelayInMilliseconds, IvfTransformer } from './Util/IvfReader';
+import { H264NalSplitter } from './Util/H264NalSplitter';
+import { formatDuration, getResolutionData } from '../Util/Util';
+import { StreamDispatcher } from './StreamDispatcher';
+import VoiceUDP from '../Class/VoiceUDP';
 import { DiscordStreamClientError, ErrorCodes, ErrorCode } from '../Util/Error';
 
 interface PlayOptions {
@@ -40,10 +39,10 @@ interface Player {
 
 class Player extends EventEmitter {
 	playable!: string | Readable;
-	voiceUdp!: VoiceUDP;
+	voiceUDP!: VoiceUDP;
 	command?: ffmpeg.FfmpegCommand;
-	videoStream!: VideoStream;
-	audioStream?: AudioStream;
+	videoStream!: StreamDispatcher<'video'>;
+	audioStream?: StreamDispatcher<'audio'>;
 	videoOutput!: IvfTransformer | H264NalSplitter;
 	opusStream?: prism.opus.Encoder;
 	fps: number = 60;
@@ -60,7 +59,7 @@ class Player extends EventEmitter {
 	volumeManager?: prism.VolumeTransformer;
 	constructor(
 		playable: string | Readable,
-		voiceUdp: VoiceUDP,
+		voiceUDP: VoiceUDP,
 		ffmpegPath?: {
 			ffmpeg: string;
 			ffprobe: string;
@@ -70,11 +69,15 @@ class Player extends EventEmitter {
 		if (typeof playable !== 'string' && !playable.readable) {
 			throw new DiscordStreamClientError('PLAYER_MISSING_PLAYABLE');
 		}
-		if (!(voiceUdp instanceof VoiceUDP)) {
+		if (!(voiceUDP instanceof VoiceUDP)) {
 			throw new DiscordStreamClientError('PLAYER_MISSING_VOICE_UDP');
 		}
-		this.playable = playable;
-		this.voiceUdp = voiceUdp;
+		Object.defineProperty(this, 'playable', {
+			value: playable,
+		});
+		Object.defineProperty(this, 'voiceUDP', {
+			value: voiceUDP,
+		});
 		if (ffmpegPath) {
 			this.ffmpegPath = ffmpegPath;
 			ffmpeg.setFfmpegPath(ffmpegPath.ffmpeg);
@@ -83,7 +86,7 @@ class Player extends EventEmitter {
 		this.checkFFmpegAndFFprobeExists();
 	}
 
-	checkFFmpegAndFFprobeExists() {
+	private checkFFmpegAndFFprobeExists() {
 		return new Promise((resolve, reject) => {
 			ffmpeg.getAvailableEncoders((err, encoders) => {
 				if (err) reject(err);
@@ -95,7 +98,7 @@ class Player extends EventEmitter {
 		});
 	}
 
-	validateInputMetadata(input: any): Promise<{
+	private validateInputMetadata(input: any): Promise<{
 		audio: boolean;
 		video: boolean;
 	}> {
@@ -147,20 +150,38 @@ class Player extends EventEmitter {
 			}
 			this.playOptions = options;
 			const checkData = await this.validateInputMetadata(this.playable);
-			this.videoStream = new VideoStream(
-				this.voiceUdp as VoiceUDP,
+			const videoStream = this.metadata?.streams.find(
+				(s) => s.codec_type === 'video',
+			);
+			const evalGetFPS = (str: string) => {
+				try {
+					return eval(str);
+				} catch {
+					return 0;
+				}
+			};
+			// FPS
+			const fpsOutput =
+				evalGetFPS(videoStream?.r_frame_rate || '') ||
+				evalGetFPS(videoStream?.avg_frame_rate || '');
+			if (fpsOutput) {
+				this.fps = fpsOutput;
+			}
+			this.videoStream = new StreamDispatcher(
+				this.voiceUDP as VoiceUDP,
+				'video',
 				this.fps,
 			);
-			if (this.voiceUdp.voiceConnection.manager.videoCodec == 'H264') {
+			if (this.voiceUDP.voiceConnection.manager.videoCodec == 'H264') {
 				this.videoOutput = new H264NalSplitter();
 			} else if (
-				this.voiceUdp.voiceConnection.manager.videoCodec == 'VP8'
+				this.voiceUDP.voiceConnection.manager.videoCodec == 'VP8'
 			) {
 				this.videoOutput = new IvfTransformer();
 			}
 
 			this.videoOutput.on('header', (header: any) => {
-				(this.videoStream as VideoStream).setSleepTime(
+				(this.videoStream as StreamDispatcher<'video'>).setSleepTime(
 					getFrameDelayInMilliseconds(header),
 				);
 			});
@@ -227,26 +248,9 @@ class Player extends EventEmitter {
 					})
 					.noAudio();
 				const videoResolutionData = getResolutionData(
-					this.voiceUdp?.voiceConnection?.manager?.resolution ??
+					this.voiceUDP?.voiceConnection?.manager?.resolution ??
 						'auto',
 				);
-				const videoStream = this.metadata?.streams.find(
-					(s) => s.codec_type === 'video',
-				);
-				const evalGetFPS = (str: string) => {
-					try {
-						return eval(str);
-					} catch {
-						return 0;
-					}
-				}
-				// FPS
-				const fpsOutput =
-					evalGetFPS(videoStream?.r_frame_rate || '') ||
-					evalGetFPS(videoStream?.avg_frame_rate || '');
-				if (fpsOutput) {
-					this.voiceUdp.videoPacketizer.fps = fpsOutput;
-				}
 				if (
 					videoResolutionData.type === 'fixed' &&
 					videoStream &&
@@ -275,25 +279,26 @@ class Player extends EventEmitter {
 					);
 				}
 				if (
-					this.voiceUdp.voiceConnection.manager.videoCodec == 'H264'
+					this.voiceUDP.voiceConnection.manager.videoCodec == 'H264'
 				) {
 					this.command
 						.format('h264')
 						.outputOption(
-							`-tune zerolatency -pix_fmt yuv420p -profile:v baseline -g ${this.voiceUdp.videoPacketizer.fps} -x264-params keyint=${this.voiceUdp.videoPacketizer.fps}:min-keyint=${this.voiceUdp.videoPacketizer.fps} -bsf:v h264_metadata=aud=insert`.split(
+							`-tune zerolatency -pix_fmt yuv420p -profile:v baseline -g ${this.fps} -x264-params keyint=${this.fps}:min-keyint=${this.fps} -bsf:v h264_metadata=aud=insert`.split(
 								' ',
 							),
 						);
 				} else if (
-					this.voiceUdp.voiceConnection.manager.videoCodec == 'VP8'
+					this.voiceUDP.voiceConnection.manager.videoCodec == 'VP8'
 				) {
 					this.command
 						.format('ivf')
 						.outputOption('-deadline', 'realtime');
 				}
 				if (checkData.audio) {
-					this.audioStream = new AudioStream(
-						this.voiceUdp as VoiceUDP,
+					this.audioStream = new StreamDispatcher(
+						this.voiceUDP as VoiceUDP,
+						'audio',
 					);
 					this.opusStream = new prism.opus.Encoder({
 						channels: 2,
@@ -354,9 +359,12 @@ class Player extends EventEmitter {
 				}
 				this.command.run();
 				this.videoOutput.pipe(this.videoStream, { end: false });
-				this.opusStream?.pipe(this.audioStream as AudioStream, {
-					end: false,
-				});
+				this.opusStream?.pipe(
+					this.audioStream as StreamDispatcher<'audio'>,
+					{
+						end: false,
+					},
+				);
 			} catch (e) {
 				this.command = undefined;
 				reject(e);
@@ -397,7 +405,9 @@ class Player extends EventEmitter {
 		if (!this.command)
 			throw new DiscordStreamClientError('PLAYER_NOT_PLAYING');
 		util.pause(this.command);
-		this.voiceUdp?.voiceConnection.manager.pauseScreenShare(true);
+		this.voiceUDP.voiceConnection.manager.pauseScreenShare(true);
+		this.voiceUDP.voiceConnection.setVideoStatus(false);
+		this.voiceUDP.voiceConnection.setSpeaking(false);
 		this.#isPaused = true;
 		this.#cachedDuration = Date.now() - this.#startTime;
 		return this;
@@ -407,7 +417,9 @@ class Player extends EventEmitter {
 		if (!this.command)
 			throw new DiscordStreamClientError('PLAYER_NOT_PLAYING');
 		util.resume(this.command);
-		this.voiceUdp?.voiceConnection.manager.pauseScreenShare(false);
+		this.voiceUDP.voiceConnection.manager.pauseScreenShare(false);
+		this.voiceUDP.voiceConnection.setVideoStatus(true);
+		this.voiceUDP.voiceConnection.setSpeaking(true);
 		this.#isPaused = false;
 		this.#startTime = Date.now() - this.#cachedDuration;
 		return this;

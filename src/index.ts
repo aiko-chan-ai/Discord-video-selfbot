@@ -75,6 +75,7 @@ class DiscordStreamClient extends EventEmitter {
 		close: any;
 		random: (n: any) => any;
 	}
+	#isPauseScreenShare = false;
 	constructor(client: Client) {
 		super();
 		if (!client || !(client instanceof Client))
@@ -300,6 +301,7 @@ class DiscordStreamClient extends EventEmitter {
 
 	pauseScreenShare(isPause = false) {
 		if (!this.connection?.streamConnection) return;
+		if (this.#isPauseScreenShare === isPause) return;
 		let streamKey;
 		if (['DM', 'GROUP_DM'].includes(this.channel?.type as string)) {
 			streamKey = `call:${this.channel?.id}:${this.client.user?.id}`;
@@ -308,7 +310,6 @@ class DiscordStreamClient extends EventEmitter {
 				throw new DiscordStreamClientError('MISSING_VOICE_CHANNEL');
 			streamKey = `guild:${this.channel.guildId}:${this.channel.id}:${this.client.user?.id}`;
 		}
-
 		(this.client.ws as any).broadcast({
 			// @ts-ignore
 			op: GatewayOpCodes.STREAM_SET_PAUSED,
@@ -317,6 +318,7 @@ class DiscordStreamClient extends EventEmitter {
 				paused: isPause,
 			},
 		});
+		this.#isPauseScreenShare = isPause;
 	}
 
 	stopScreenShare() {
@@ -337,6 +339,7 @@ class DiscordStreamClient extends EventEmitter {
 			},
 		});
 		this.connection.streamConnection = undefined;
+		this.#isPauseScreenShare = false;
 	}
 
 	createPlayer(

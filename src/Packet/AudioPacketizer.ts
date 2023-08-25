@@ -10,12 +10,14 @@ export class AudioPacketizer extends BaseMediaPacketizer {
 
 	public sendFrame(frame: any): void {
 		const packet = this.createPacket(frame);
-		this.connection.sendPacket(packet, 'audio');
+		this.voiceUDP.sendPacket(packet, 'audio');
 		this.onFrameSent();
 	}
 
 	public createPacket(chunk: any): Buffer {
-		const header = this.makeRtpHeader(this.connection.voiceConnection.ssrc as number);
+		const header = this.makeRtpHeader(
+			this.voiceUDP.voiceConnection.ssrc as number,
+		);
 		return this.encryptData(chunk, header);
 	}
 

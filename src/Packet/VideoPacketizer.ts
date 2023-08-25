@@ -8,11 +8,15 @@ import { DiscordStreamClientError } from '../Util/Error';
 export class VideoPacketizer extends BaseMediaPacketizer {
 	public videoCodec: VideoCodec;
 	private _pictureId: number = 0; // VP8
-	public fps: number = 60;
-	constructor(connection: VoiceUDP, videoCodec: VideoCodec, fps = 60) {
+	public fps!: number;
+	constructor(connection: VoiceUDP, videoCodec: VideoCodec) {
 		super(connection, VideoCodecType[videoCodec], true);
 		this.videoCodec = videoCodec;
+	}
+
+	public setFPS(fps: number): this {
 		this.fps = fps;
+		return this;
 	}
 
 	public sendFrame(frame: any): void {
@@ -43,14 +47,14 @@ export class VideoPacketizer extends BaseMediaPacketizer {
 			if (nalu.length <= this.mtu) {
 				// Send as Single-Time Aggregation Packet (STAP-A).
 				const packetHeader = this.makeRtpHeader(
-					this.connection.voiceConnection.videoSsrc,
+					this.voiceUDP.voiceConnection.videoSsrc,
 					isLastNal,
 				);
 				const packetData = Buffer.concat([
 					this.createHeaderExtension(),
 					nalu,
 				]);
-				this.connection.sendPacket(
+				this.voiceUDP.sendPacket(
 					this.encryptData(packetData, packetHeader),
 					'video',
 				);
@@ -65,7 +69,7 @@ export class VideoPacketizer extends BaseMediaPacketizer {
 					const markerBit = isLastNal && isFinalPacket;
 
 					const packetHeader = this.makeRtpHeader(
-						this.connection.voiceConnection.videoSsrc,
+						this.voiceUDP.voiceConnection.videoSsrc,
 						markerBit,
 					);
 
@@ -77,7 +81,7 @@ export class VideoPacketizer extends BaseMediaPacketizer {
 					);
 
 					// nonce buffer used for encryption. 4 bytes are appended to end of packet
-					this.connection.sendPacket(
+					this.voiceUDP.sendPacket(
 						this.encryptData(packetData, packetHeader),
 						'video',
 					);
@@ -97,7 +101,7 @@ export class VideoPacketizer extends BaseMediaPacketizer {
 				i === data.length - 1,
 				i === 0,
 			);
-			this.connection.sendPacket(packet, 'video');
+			this.voiceUDP.sendPacket(packet, 'video');
 		}
 		this.onFrameSent();
 	}
@@ -112,7 +116,7 @@ export class VideoPacketizer extends BaseMediaPacketizer {
 				'Error packetizing video frame: frame is larger than mtu',
 			);
 		const packetHeader = this.makeRtpHeader(
-			this.connection.voiceConnection.videoSsrc,
+			this.voiceUDP.voiceConnection.videoSsrc,
 			isLastPacket,
 		);
 		const packetData = this.makeChunk(chunk, isFirstPacket);
@@ -223,7 +227,8 @@ export class VideoPacketizer extends BaseMediaPacketizer {
 		}
 	}
 
-	public override onFrameSent(): void {
+	public onFrameSent(): void {
+		if (!this.fps) throw new DiscordStreamClientError('INVALID_FPS');
 		this.incrementTimestamp(90000 / this.fps);
 		if (this.videoCodec == 'VP8') {
 			this.incrementPictureId();

@@ -4,7 +4,6 @@ import { DiscordStreamClientError } from '../Util/Error';
 export const max_int16bit = 2 ** 16 - 1;
 export const max_int32bit = 2 ** 32 - 1;
 
-const MAX_NONCE_SIZE = 2 ** 32 - 1;
 const nonce = Buffer.alloc(24);
 
 export class BaseMediaPacketizer {
@@ -12,25 +11,19 @@ export class BaseMediaPacketizer {
 	private _mtu: number = 1200;
 	private _sequence: number = 0;
 	private _timestamp: number = 0;
-	private _connection: VoiceUDP;
 	private _extensionEnabled: boolean;
+	public voiceUDP!: VoiceUDP;
 
 	constructor(
 		connection: VoiceUDP,
 		payloadType: number,
 		extensionEnabled = false,
 	) {
-		this._connection = connection;
+		Object.defineProperty(this, 'voiceUDP', {
+			value: connection,
+		});
 		this._payloadType = payloadType;
 		this._extensionEnabled = extensionEnabled;
-	}
-
-	public sendFrame(frame: any): void {
-		// override this
-	}
-
-	public onFrameSent(): void {
-		// override this
 	}
 
 	/**
@@ -137,45 +130,41 @@ export class BaseMediaPacketizer {
 	// rtp header extensions and payload headers are also encrypted
 	public encryptData(message: string | Uint8Array, header: Buffer): Buffer {
 		if (
-			this.connection.voiceConnection.manager.encryptionMode ===
+			this.voiceUDP.voiceConnection.manager.encryptionMode ===
 			'xsalsa20_poly1305_lite'
 		) {
-			const nonceBuffer = this.connection.getNewNonceBuffer();
-			const data = this.connection.voiceConnection.manager.methods.close(
+			const nonceBuffer = this.voiceUDP.getNewNonceBuffer();
+			const data = this.voiceUDP.voiceConnection.manager.methods.close(
 				message,
 				nonceBuffer,
-				this._connection.voiceConnection.secretkey as Uint8Array,
+				this.voiceUDP.voiceConnection.secretkey as Uint8Array,
 			);
 			return Buffer.concat([header, data, nonceBuffer.subarray(0, 4)]);
 		} else if (
-			this.connection.voiceConnection.manager.encryptionMode ===
+			this.voiceUDP.voiceConnection.manager.encryptionMode ===
 			'xsalsa20_poly1305_suffix'
 		) {
 			const random =
-				this.connection.voiceConnection.manager.methods.random(24);
+				this.voiceUDP.voiceConnection.manager.methods.random(24);
 			return Buffer.concat([
 				header,
-				this.connection.voiceConnection.manager.methods.close(
+				this.voiceUDP.voiceConnection.manager.methods.close(
 					message,
 					random,
-					this._connection.voiceConnection.secretkey as Uint8Array,
+					this.voiceUDP.voiceConnection.secretkey as Uint8Array,
 				),
 				random,
 			]);
 		} else {
 			return Buffer.concat([
 				header,
-				this.connection.voiceConnection.manager.methods.close(
+				this.voiceUDP.voiceConnection.manager.methods.close(
 					message,
 					nonce,
-					this._connection.voiceConnection.secretkey as Uint8Array,
+					this.voiceUDP.voiceConnection.secretkey as Uint8Array,
 				),
 			]);
 		}
-	}
-
-	public get connection(): VoiceUDP {
-		return this._connection;
 	}
 
 	public get mtu(): number {

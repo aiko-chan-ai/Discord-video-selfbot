@@ -1,7 +1,5 @@
 import { createSocket, Socket } from 'dgram';
 import { isIPv4 } from 'net';
-import { AudioPacketizer } from '../Packet/AudioPacketizer';
-import { VideoPacketizer } from '../Packet/VideoPacketizer';
 import { max_int32bit } from '../Packet/BaseMediaPacketizer';
 import VoiceConnection from './VoiceConnection';
 import { DiscordStreamClientError } from '../Util/Error';
@@ -25,8 +23,6 @@ class VoiceUDP {
 	nonce = 0;
 	socket?: Socket;
 	ready = false;
-	audioPacketizer: AudioPacketizer;
-	videoPacketizer: VideoPacketizer;
 	keepAliveBuffer = Buffer.alloc(8);
 	keepAliveCounter = 0;
 	keepAliveInterval?: NodeJS.Timer;
@@ -34,11 +30,6 @@ class VoiceUDP {
 		Object.defineProperty(this, 'voiceConnection', {
 			value: voiceConnection,
 		});
-		this.audioPacketizer = new AudioPacketizer(this);
-		this.videoPacketizer = new VideoPacketizer(
-			this,
-			this.voiceConnection.manager.videoCodec,
-		);
 	}
 
 	connect() {
@@ -126,19 +117,6 @@ class VoiceUDP {
 				}
 			},
 		);
-	}
-
-	sendAudioFrame(frame: any) {
-		this.audioPacketizer.sendFrame(frame);
-	}
-
-	/**
-	 * Sends packets after partitioning the video frame into
-	 * MTU-sized chunks
-	 * @param frame
-	 */
-	sendVideoFrame(frame: any) {
-		this.videoPacketizer.sendFrame(frame);
 	}
 
 	stop() {
