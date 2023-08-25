@@ -34,13 +34,25 @@ export class StreamDispatcher<type extends StreamDispatcherType> extends Writabl
 				new AudioPacketizer(udp);
 		}
 		// why not 1000 / this.fps ?
-		this.sleepTime = this.type == 'video' ? (1000 / 60) : 20;
+		this.sleepTime = this.type == 'video' ? (1000 / this.fps) : 20;
+		this.voiceUDP?.voiceConnection.manager.emit(
+			'debug',
+			'StreamDispatcher',
+			`[${this.type}]`,
+			`SleepTime: ${this.sleepTime}`,
+		);
+
 	}
 
 	setSleepTime(time: number) {
 		if (this.type == 'audio') return;
 		if (this.voiceUDP?.voiceConnection.manager.videoCodec !== 'VP8') return;
 		this.sleepTime = time;
+		this.voiceUDP.voiceConnection.manager.emit('debug', 'StreamDispatcher', `[${this.type}]`, `SleepTime: ${time}`);
+	}
+
+	setStartTime(time: number) {
+		this.startTime = time;
 	}
 
 	_write(frame: any, encoding: any, callback: any) {
@@ -53,13 +65,20 @@ export class StreamDispatcher<type extends StreamDispatcherType> extends Writabl
 		this.packetizer.sendFrame(frame);
 		let next =
 			(this.count + 1) * this.sleepTime - (Date.now() - this.startTime);
+		this.voiceUDP.voiceConnection.manager.emit('debug', 'StreamDispatcher', `[${this.type}]`, `Next: ${next}`, this.count);
 		if (next < 0) {
-			this.count = 0;
+			this.count = 1;
 			this.startTime = Date.now();
-			next =
-				(this.count + 1) * this.sleepTime -
-				(Date.now() - this.startTime);
+			next = this.sleepTime;
+			this.voiceUDP.voiceConnection.manager.emit(
+				'debug',
+				'StreamDispatcher',
+				`[${this.type}] - Reset`,
+				`Next: ${next}`,
+				this.count
+			);
 		}
+		console.log(next, this.count , this.type);
 		setTimeout(() => {
 			callback();
 		}, next);

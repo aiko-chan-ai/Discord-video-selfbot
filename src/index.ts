@@ -23,15 +23,11 @@ declare module 'discord.js-selfbot-v13' {
 	}
 }
 
+type DiscordStreamElement = 'VoiceConnection' | 'VoiceUDP' | 'StreamDispatcher';
+
 interface DiscordStreamClientEvents {
-	debug: (
-		type: 'VoiceConnection' | 'VoiceUDP' | string,
-		...args: any[]
-	) => void;
-	error: (
-		type: 'VoiceConnection' | 'VoiceUDP' | string,
-		error: Error,
-	) => void;
+	debug: (type: DiscordStreamElement, ...args: any[]) => void;
+	error: (type: DiscordStreamElement, error: Error) => void;
 }
 
 interface DiscordStreamClientVoiceState {

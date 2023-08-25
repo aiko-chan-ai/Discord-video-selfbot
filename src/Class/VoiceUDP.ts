@@ -37,7 +37,7 @@ class VoiceUDP {
 			this.socket = createSocket('udp4');
 
 			this.socket.on('error', (error: any) => {
-				this.voiceConnection.manager.emit('debug', 'VoideUDP', error);
+				this.voiceConnection.manager.emit('debug', "VoiceUDP", error);
 			});
 
 			this.socket.once('message', (message: any) => {
