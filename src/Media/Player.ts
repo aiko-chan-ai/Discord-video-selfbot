@@ -349,6 +349,9 @@ class Player extends EventEmitter {
 								' ',
 							),
 						);
+						this.command.inputOption(
+							'-protocol_whitelist file,http,https,tcp,tls',
+						);
 				}
 				if (
 					options?.seekTime &&
