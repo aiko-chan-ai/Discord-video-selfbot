@@ -217,7 +217,7 @@ class Player extends EventEmitter {
 
 			try {
 				this.command = ffmpeg(this.playable)
-					.inputOption('-re')
+					//.inputOption('-re')
 					.addOption('-loglevel', '0')
 					.addOption('-preset', 'ultrafast')
 					.addOption('-fflags', 'nobuffer')
