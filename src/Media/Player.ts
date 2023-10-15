@@ -283,11 +283,15 @@ class Player extends EventEmitter {
 				) {
 					this.command
 						.format('h264')
-						.outputOption(
-							`-tune zerolatency -pix_fmt yuv420p -profile:v baseline -g ${this.fps} -x264-params keyint=${this.fps}:min-keyint=${this.fps} -bsf:v h264_metadata=aud=insert`.split(
-								' ',
-							),
-						);
+						.outputOptions([
+							'-tune zerolatency',
+							'-pix_fmt yuv420p',
+							'-preset ultrafast',
+							'-profile:v baseline',
+							`-g ${this.fps}`,
+							`-x264-params keyint=${this.fps}:min-keyint=${this.fps}`,
+							'-bsf:v h264_metadata=aud=insert',
+						]);
 				} else if (
 					this.voiceUDP.voiceConnection.manager.videoCodec == 'VP8'
 				) {
@@ -344,11 +348,12 @@ class Player extends EventEmitter {
 							.join('\r\n'),
 					);
 					if (!isHls)
-						this.command.inputOptions(
-							'-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 4294'.split(
-								' ',
-							),
-						);
+						this.command.inputOptions([
+							'-reconnect 1',
+							'-reconnect_at_eof 1',
+							'-reconnect_streamed 1',
+							'-reconnect_delay_max 4294',
+						]);
 						this.command.inputOption(
 							'-protocol_whitelist file,http,https,tcp,tls',
 						);

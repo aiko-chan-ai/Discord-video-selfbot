@@ -78,7 +78,6 @@ export class StreamDispatcher<type extends StreamDispatcherType> extends Writabl
 				this.count
 			);
 		}
-		console.log(next, this.count , this.type);
 		setTimeout(() => {
 			callback();
 		}, next);
