@@ -206,7 +206,7 @@ class DiscordStreamClient extends EventEmitter {
 		if (
 			!channel ||
 			(channel.isVoice() && !channel.joinable) ||
-			!['DM', 'GROUP_DM'].includes(channel.type)
+			(!channel.isVoice() && !['DM', 'GROUP_DM'].includes(channel.type))
 		)
 			throw new DiscordStreamClientError('NO_CHANNEL');
 		this.patch();
