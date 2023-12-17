@@ -7,6 +7,7 @@ import { VideoTestCardBase64 } from '../Util/Constants';
 
 class VoiceConnection extends BaseConnnection {
 	#connectionTimeout: number;
+	streamConnection?: StreamConnection;
 	constructor(
 		manager: DiscordStreamClient,
 		guildId?: Snowflake,

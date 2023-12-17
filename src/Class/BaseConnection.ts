@@ -27,7 +27,6 @@ class BaseConnnection {
 	selfPort?: number;
 	secretkey?: Uint8Array;
 	manager!: DiscordStreamClient;
-	streamConnection?: StreamConnection;
 	isSpeakingAudio = false;
 	isSpeakingVideo = false;
 	constructor(
