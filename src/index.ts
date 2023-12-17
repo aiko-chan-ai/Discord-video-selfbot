@@ -9,11 +9,10 @@ import {
 	DMChannel,
 	PartialGroupDMChannel,
 	VoiceChannel,
-	VoiceChannelResolvable,
 } from 'discord.js-selfbot-v13';
 import { DiscordStreamClientError, ErrorCodes } from './Util/Error';
 import { ResolutionType, parseStreamKey } from './Util/Util';
-import { VideoCodec, VideoTestCardBase64 } from './Util/Constants';
+import { VideoCodec } from './Util/Constants';
 import { Readable } from 'stream';
 import { methods } from './Util/Library';
 
@@ -65,7 +64,6 @@ class DiscordStreamClient extends EventEmitter {
 		selfMute: false,
 		selfVideo: false,
 	};
-	player?: Player;
 	#resolution: ResolutionType = '1080p';
 	#videoCodec: VideoCodec = 'H264';
 	#encryptionMode: EncryptionMode = 'xsalsa20_poly1305_lite';
@@ -75,6 +73,7 @@ class DiscordStreamClient extends EventEmitter {
 		random: (n: any) => any;
 	};
 	#isPauseScreenShare = false;
+	#player?: Player;
 	constructor(client: Client) {
 		super();
 		if (!client || !(client instanceof Client))
@@ -99,6 +98,10 @@ class DiscordStreamClient extends EventEmitter {
 
 	get encryptionMode() {
 		return this.#encryptionMode;
+	}
+
+	get player() {
+		return this.#player;
 	}
 
 	private _initModules() {
@@ -364,17 +367,17 @@ class DiscordStreamClient extends EventEmitter {
 	) {
 		if (!this.connection)
 			throw new DiscordStreamClientError('NO_STREAM_CONNECTION');
-		const player = new Player(playable, udpConnection, ffmpegPath);
-		player.once('spawnProcess', () => {
+		this.#player = new Player(playable, udpConnection, ffmpegPath);
+		this.#player.once('spawnProcess', () => {
 			this.pauseScreenShare(false);
 		});
-		player.once('finish', () => {
+		this.#player.once('finish', () => {
 			udpConnection.voiceConnection.setSpeaking(false);
 			udpConnection.voiceConnection.setVideoStatus(false);
 			this.pauseScreenShare(true);
-			this.player = undefined;
+			this.#player = undefined;
 		});
-		return player;
+		return this.#player;
 	}
 }
 

@@ -19,6 +19,26 @@ interface PlayOptions {
 	// @ts-ignore
 	seekTime?: number;
 	fps?: number;
+	ffmpegConfig?: Partial<FFmpegConfigOutput>;
+}
+
+type PresetType =
+	| 'ultrafast'
+	| 'superfast'
+	| 'veryfast'
+	| 'faster'
+	| 'fast'
+	| 'medium'
+	| 'slow'
+	| 'slower'
+	| 'veryslow';
+
+type Quality = 'best' | 'good' | 'realtime';
+
+interface FFmpegConfigOutput {
+	preset: PresetType;
+	quality: Quality;
+	fflags: string;
 }
 
 interface PlayerEvents {
@@ -221,8 +241,18 @@ class Player extends EventEmitter {
 				this.command = ffmpeg(this.playable)
 					//.inputOption('-re')
 					.addOption('-loglevel', '0')
-					.addOption('-preset', 'ultrafast')
-					.addOption('-fflags', 'nobuffer')
+					.addOption(
+						'-preset',
+						options.ffmpegConfig?.preset || 'ultrafast',
+					)
+					.addOption(
+						'-fflags',
+						options.ffmpegConfig?.fflags || 'nobuffer',
+					)
+					.outputOption(
+						'-quality',
+						options.ffmpegConfig?.quality || 'realtime',
+					)
 					.addOption('-analyzeduration', '0')
 					.addOption('-flags', 'low_delay')
 					.on('end', () => {
@@ -288,19 +318,26 @@ class Player extends EventEmitter {
 						.format('h264')
 						.outputOptions([
 							'-tune zerolatency',
+							'-profile:v high422',
+							'-bsf:v h264_metadata=aud=insert',
+							`-g ${this.fps}`,
+							// `-x264-params keyint=${this.fps}:min-keyint=${this.fps}`,
+						]);
+						/*
+						.outputOptions([
+							'-tune zerolatency',
 							'-pix_fmt yuv420p',
-							'-preset ultrafast',
 							'-profile:v baseline',
 							`-g ${this.fps}`,
 							`-x264-params keyint=${this.fps}:min-keyint=${this.fps}`,
 							'-bsf:v h264_metadata=aud=insert',
 						]);
+						*/
 				} else if (
 					this.voiceUDP.voiceConnection.manager.videoCodec == 'VP8'
 				) {
 					this.command
-						.format('ivf')
-						.outputOption('-deadline', 'realtime');
+						.format('ivf');
 				}
 				if (checkData.audio) {
 					this.audioStream = new StreamDispatcher(

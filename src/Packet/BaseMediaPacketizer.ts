@@ -1,5 +1,4 @@
 import VoiceUDP from '../Class/VoiceUDP';
-import { DiscordStreamClientError } from '../Util/Error';
 
 export const max_int16bit = 2 ** 16 - 1;
 export const max_int32bit = 2 ** 32 - 1;

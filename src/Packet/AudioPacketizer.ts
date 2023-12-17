@@ -1,11 +1,12 @@
 import VoiceUDP from "../Class/VoiceUDP";
+import { OpusCodecType } from "../Util/Constants";
 import { BaseMediaPacketizer } from "./BaseMediaPacketizer";
 
 const CHANNELS = 2;
 const TIMESTAMP_INC = (48000 / 100) * CHANNELS;
 export class AudioPacketizer extends BaseMediaPacketizer {
 	constructor(connection: VoiceUDP) {
-		super(connection, 0x78);
+		super(connection, OpusCodecType);
 	}
 
 	public sendFrame(frame: any): void {

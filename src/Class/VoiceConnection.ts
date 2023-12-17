@@ -1,7 +1,6 @@
 import StreamConnection from './StreamConnection';
 import { DiscordStreamClientError } from '../Util/Error';
 import BaseConnnection from './BaseConnection';
-import VoiceUDP from './VoiceUDP';
 import DiscordStreamClient from '..';
 import { Snowflake } from 'discord.js-selfbot-v13';
 import { VideoTestCardBase64 } from '../Util/Constants';
