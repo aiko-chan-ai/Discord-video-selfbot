@@ -52,6 +52,7 @@
   "homepage": "https://github.com/aiko-chan-ai/Discord-video-selfbot",
   "devDependencies": {
     "@types/fluent-ffmpeg": "^2.1.21",
+    "@types/node": "^20.10.4",
     "esbuild-plugin-version-injector": "^1.1.0",
     "tsup": "^7.1.0",
     "typescript": "^5.1.6"

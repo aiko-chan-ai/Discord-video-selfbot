@@ -1,9 +1,6 @@
-import VoiceConnection from './VoiceConnection';
-import { VoiceOpCodes } from '../Util/Opcode';
+import BaseConnnection from './BaseConnection';
 
-export default class StreamConnection extends VoiceConnection {
-	// @ts-ignore
+export default class StreamConnection extends BaseConnnection {
 	streamConnection: undefined;
 	streamKey?: string;
-    // video
 }

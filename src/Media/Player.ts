@@ -4,8 +4,8 @@ import { Readable } from 'stream';
 import EventEmitter from 'events';
 import prism from 'prism-media';
 import { StreamOutput } from '@aikochan2k6/fluent-ffmpeg-multistream-ts';
-import { getFrameDelayInMilliseconds, IvfTransformer } from './Util/IvfReader';
-import { H264NalSplitter } from './Util/H264NalSplitter';
+import { getFrameDelayInMilliseconds, IvfTransformer } from './Codec/VP8';
+import { H264NalSplitter } from './Codec/H264';
 import { formatDuration, getResolutionData } from '../Util/Util';
 import { StreamDispatcher } from './StreamDispatcher';
 import VoiceUDP from '../Class/VoiceUDP';
@@ -18,6 +18,7 @@ interface PlayOptions {
 	volume?: number;
 	// @ts-ignore
 	seekTime?: number;
+	fps?: number;
 }
 
 interface PlayerEvents {
@@ -162,6 +163,7 @@ class Player extends EventEmitter {
 			};
 			// FPS
 			const fpsOutput =
+				options.fps ||
 				evalGetFPS(videoStream?.r_frame_rate || '') ||
 				evalGetFPS(videoStream?.avg_frame_rate || '');
 			if (fpsOutput) {
@@ -243,6 +245,7 @@ class Player extends EventEmitter {
 					.on('start', (commandLine) => {
 						this.emit('spawnProcess', commandLine);
 					})
+					.FPSOutput(fpsOutput)
 					.output(StreamOutput(this.videoOutput).url, {
 						end: false,
 					})
@@ -354,9 +357,9 @@ class Player extends EventEmitter {
 							'-reconnect_streamed 1',
 							'-reconnect_delay_max 4294',
 						]);
-						this.command.inputOption(
-							'-protocol_whitelist file,http,https,tcp,tls',
-						);
+					this.command.inputOption(
+						'-protocol_whitelist file,http,https,tcp,tls',
+					);
 				}
 				if (
 					options?.seekTime &&

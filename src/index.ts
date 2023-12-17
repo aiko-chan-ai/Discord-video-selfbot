@@ -66,10 +66,10 @@ class DiscordStreamClient extends EventEmitter {
 		selfVideo: false,
 	};
 	player?: Player;
-	resolution: ResolutionType = '1080p';
-	videoCodec: VideoCodec = 'H264';
-	encryptionMode: EncryptionMode = 'xsalsa20_poly1305_lite';
-	methods!: {
+	#resolution: ResolutionType = '1080p';
+	#videoCodec: VideoCodec = 'H264';
+	#encryptionMode: EncryptionMode = 'xsalsa20_poly1305_lite';
+	#methods!: {
 		open: any;
 		close: any;
 		random: (n: any) => any;
@@ -85,8 +85,24 @@ class DiscordStreamClient extends EventEmitter {
 		this._initModules();
 	}
 
+	get methods() {
+		return this.#methods;
+	}
+
+	get resolution() {
+		return this.#resolution;
+	}
+
+	get videoCodec() {
+		return this.#videoCodec;
+	}
+
+	get encryptionMode() {
+		return this.#encryptionMode;
+	}
+
 	private _initModules() {
-		this.methods = methods;
+		this.#methods = methods;
 	}
 
 	patch() {
@@ -105,46 +121,67 @@ class DiscordStreamClient extends EventEmitter {
 	static _handleEvents(this: Client<true>, packet: { t: string; d: any }) {
 		if (typeof packet !== 'object' || !packet.t || !packet.d) return;
 		const { t: event, d: data } = packet;
-		if (event === 'VOICE_STATE_UPDATE') {
-			if (data.user_id === this.user.id) {
-				this.streamClient.connection?.setSession(data.session_id);
+		switch (event) {
+			case 'VOICE_STATE_UPDATE': {
+				if (data.user_id === this.user.id) {
+					this.streamClient.connection?.setSession(data.session_id);
+				}
+				break;
 			}
-		} else if (event === 'VOICE_SERVER_UPDATE') {
-			this.streamClient.connection?.setServer(data);
-		} else if (event === 'STREAM_CREATE') {
-			const StreamKey = parseStreamKey(data.stream_key);
-			if (this.streamClient.connection?.channelId != StreamKey.channelId)
-				return;
-			if (StreamKey.userId === this.user.id) {
-				(
-					(this.streamClient.connection as VoiceConnection)
-						.streamConnection as StreamConnection
-				).serverId = data.rtc_server_id;
-				(
-					(this.streamClient.connection as VoiceConnection)
-						.streamConnection as StreamConnection
-				).streamKey = data.stream_key;
-				(
-					(this.streamClient.connection as VoiceConnection)
-						.streamConnection as StreamConnection
-				).setSession(this.streamClient.connection?.sessionId as string);
+			case 'VOICE_SERVER_UPDATE': {
+				this.streamClient.connection?.setServer(data);
+				break;
 			}
-		} else if (event === 'STREAM_SERVER_UPDATE') {
-			const StreamKey = parseStreamKey(data.stream_key);
-			if (this.streamClient.connection?.channelId != StreamKey.channelId)
-				return;
-			if (StreamKey.userId === this.user.id) {
-				(
-					(this.streamClient.connection as VoiceConnection)
-						.streamConnection as StreamConnection
-				).setServer(data);
+			case 'STREAM_CREATE': {
+				const StreamKey = parseStreamKey(data.stream_key);
+				if (
+					StreamKey.userId === this.user.id &&
+					this.streamClient.connection?.channelId ==
+						StreamKey.channelId
+				) {
+					(
+						(this.streamClient.connection as VoiceConnection)
+							.streamConnection as StreamConnection
+					).serverId = data.rtc_server_id;
+					(
+						(this.streamClient.connection as VoiceConnection)
+							.streamConnection as StreamConnection
+					).streamKey = data.stream_key;
+					(
+						(this.streamClient.connection as VoiceConnection)
+							.streamConnection as StreamConnection
+					).setSession(
+						this.streamClient.connection?.sessionId as string,
+					);
+				}
+				break;
 			}
-		} else if (event === 'STREAM_DELETE') {
-			const StreamKey = parseStreamKey(data.stream_key);
-			if (this.streamClient.connection?.channelId != StreamKey.channelId)
-				return;
-			if (StreamKey.userId === this.user.id) {
-				(this.streamClient.connection as VoiceConnection).disconnect();
+			case 'STREAM_SERVER_UPDATE': {
+				const StreamKey = parseStreamKey(data.stream_key);
+				if (
+					StreamKey.userId === this.user.id &&
+					this.streamClient.connection?.channelId ==
+						StreamKey.channelId
+				) {
+					(
+						(this.streamClient.connection as VoiceConnection)
+							.streamConnection as StreamConnection
+					).setServer(data);
+				}
+				break;
+			}
+			case 'STREAM_DELETE': {
+				const StreamKey = parseStreamKey(data.stream_key);
+				if (
+					StreamKey.userId === this.user.id &&
+					this.streamClient.connection?.channelId ==
+						StreamKey.channelId
+				) {
+					(
+						this.streamClient.connection as VoiceConnection
+					).disconnect();
+				}
+				break;
 			}
 		}
 	}
@@ -152,13 +189,13 @@ class DiscordStreamClient extends EventEmitter {
 	setResolution(resolution: ResolutionType) {
 		if (!['1440p', '1080p', '720p', '480p', 'auto'].includes(resolution))
 			throw new DiscordStreamClientError('INVALID_RESOLUTION');
-		this.resolution = resolution;
+		this.#resolution = resolution;
 	}
 
 	setVideoCodec(codec: VideoCodec) {
 		if (!['VP8', 'H264'].includes(codec))
 			throw new DiscordStreamClientError('INVALID_CODEC');
-		this.videoCodec = codec;
+		this.#videoCodec = codec;
 	}
 
 	setEncryptionMode(mode: EncryptionMode) {
@@ -170,7 +207,7 @@ class DiscordStreamClient extends EventEmitter {
 			].includes(mode)
 		)
 			throw new DiscordStreamClientError('INVALID_ENCRYPTION_MODE');
-		this.encryptionMode = mode;
+		this.#encryptionMode = mode;
 	}
 
 	signalVoiceChannel(
@@ -217,44 +254,8 @@ class DiscordStreamClient extends EventEmitter {
 			// @ts-ignore
 			channel.guildId ?? null,
 			channel.id,
+			timeout,
 		);
-		// Inject stream connection
-		this.connection.createStream = function (postTestCard = true) {
-			this.streamConnection = new StreamConnection(
-				this.manager,
-				this.guildId,
-				this.channelId,
-			);
-			this.manager.signalScreenShare();
-			this.manager.pauseScreenShare(false);
-			return new Promise((resolve, reject) => {
-				let timeoutId = setTimeout(() => {
-					reject(
-						new DiscordStreamClientError(
-							'STREAM_CONNECTION_FAILED',
-						),
-					);
-				}, timeout).unref();
-				let i = setInterval(() => {
-					if (
-						this.streamConnection?.sessionId &&
-						this.streamConnection.token &&
-						this.streamConnection.streamKey
-					) {
-						clearTimeout(timeoutId);
-						clearInterval(i);
-						resolve(this.streamConnection.connect());
-						// Send test card
-						if (postTestCard) {
-							this.manager.client.user?.voice.postPreview(
-								VideoTestCardBase64,
-							);
-						}
-					}
-				}, 100).unref();
-			});
-		};
-
 		return new Promise((resolve, reject) => {
 			let timeoutId = setTimeout(() => {
 				reject(

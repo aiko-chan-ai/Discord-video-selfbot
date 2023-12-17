@@ -6,16 +6,16 @@ import { VideoCodec } from '../Util/Constants';
 
 type StreamDispatcherType = 'audio' | 'video';
 
-export class StreamDispatcher<type extends StreamDispatcherType> extends Writable {
+export class StreamDispatcher<T extends StreamDispatcherType> extends Writable {
 	public voiceUDP?: VoiceUDP;
 	public count = 0;
 	public sleepTime!: number;
 	public startTime = 0;
-	public fps!: type extends 'video' ? number : never;
+	public fps!: T extends 'video' ? number : never;
 	public type!: StreamDispatcherType;
-	public packetizer!: type extends 'video' ? VideoPacketizer : AudioPacketizer;
+	public packetizer!: T extends 'video' ? VideoPacketizer : AudioPacketizer;
 
-	constructor(udp: VoiceUDP, type: StreamDispatcherType, fps: number = 0) {
+	constructor(udp: VoiceUDP, type: T, fps: number = 0) {
 		super();
 		Object.defineProperty(this, 'voiceUDP', {
 			value: udp,

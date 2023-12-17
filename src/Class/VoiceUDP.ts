@@ -1,8 +1,10 @@
 import { createSocket, Socket } from 'dgram';
 import { isIPv4 } from 'net';
 import { max_int32bit } from '../Packet/BaseMediaPacketizer';
-import VoiceConnection from './VoiceConnection';
 import { DiscordStreamClientError } from '../Util/Error';
+import BaseConnnection from './BaseConnection';
+import VoiceConnection from './VoiceConnection';
+import StreamConnection from './StreamConnection';
 
 // credit to discord.js
 function parseLocalPacket(message: any) {
@@ -19,14 +21,15 @@ const KEEP_ALIVE_INTERVAL = 5e3;
 const MAX_COUNTER_VALUE = 2 ** 32 - 1;
 
 class VoiceUDP {
-	voiceConnection!: VoiceConnection;
+	voiceConnection!: BaseConnnection | VoiceConnection | StreamConnection;
 	nonce = 0;
 	socket?: Socket;
 	ready = false;
 	keepAliveBuffer = Buffer.alloc(8);
 	keepAliveCounter = 0;
-	keepAliveInterval?: NodeJS.Timer;
-	constructor(voiceConnection: VoiceConnection) {
+	keepAliveInterval?: NodeJS.Timeout;
+
+	constructor(voiceConnection: BaseConnnection) {
 		Object.defineProperty(this, 'voiceConnection', {
 			value: voiceConnection,
 		});
@@ -35,11 +38,9 @@ class VoiceUDP {
 	connect() {
 		return new Promise((resolve, reject) => {
 			this.socket = createSocket('udp4');
-
 			this.socket.on('error', (error: any) => {
-				this.voiceConnection.manager.emit('debug', "VoiceUDP", error);
+				this.voiceConnection.manager.emit('debug', 'VoiceUDP', error);
 			});
-
 			this.socket.once('message', (message: any) => {
 				if (message.readUInt16BE(0) !== 2) {
 					reject('Wrong handshake packet for UDP');
@@ -123,7 +124,7 @@ class VoiceUDP {
 		this.ready = false;
 		try {
 			this.socket?.disconnect();
-			clearInterval(this.keepAliveInterval as NodeJS.Timer);
+			clearInterval(this.keepAliveInterval);
 			this.keepAliveBuffer = Buffer.alloc(8);
 			this.keepAliveCounter = 0;
 		} catch (e) {
